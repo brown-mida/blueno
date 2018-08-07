@@ -7,8 +7,12 @@ import pandas as pd
 import warnings
 from sklearn import model_selection
 
-from blueno import io
-from blueno.types import ParamConfig, LukePipelineConfig, DataConfig
+from . import io
+from ..types import (
+    ParamConfig,
+    LukePipelineConfig,
+    DataConfig
+)
 
 
 def clean_data(arrays: Dict[str, np.ndarray],

@@ -25,6 +25,7 @@ The script assumes that:
 - you are able to get processed data onto that computer
 - you are familiar with Python and the terminal
 """
+
 import datetime
 import importlib
 import logging
@@ -41,15 +42,27 @@ from elasticsearch_dsl import connections
 from google.auth.exceptions import DefaultCredentialsError
 from sklearn import model_selection
 
-import blueno
-from blueno import (
-    utils,
-    preprocessing,
-    elasticsearch,
-    logger,
-    gcs,
+from ..utils.gcs import (
+    upload_model_to_gcs,
+    upload_gcs_plots,
+    equal_array_counts,
+    download_to_gpu1708
 )
-from blueno.gcs import upload_model_to_gcs
+from ..utils.logger import (
+    configure_job_logger,
+    configure_parent_logger
+)
+from ..utils.metrics import (
+    true_positives,
+    false_negatives,
+    sensitivity,
+    specificity
+)
+from ..utils.slack import slack_report
+from ..utils.preprocessing import prepare_data
+from ..utils.elasticsearch import insert_or_ignore_filepaths
+from ..utils.callbacks import create_callbacks
+from ..types import ParamConfig, ParamGrid
 
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
@@ -60,7 +73,7 @@ def start_job(x_train: np.ndarray,
               y_valid: np.ndarray,
               job_name: str,
               username: str,
-              params: blueno.ParamConfig,
+              params: ParamConfig,
               slack_token: str = None,
               log_dir: str = None,
               plot_dir=None,
@@ -103,7 +116,7 @@ def start_job(x_train: np.ndarray,
                            f'{job_name}-{created_at}.log')
         assert log_filepath.startswith(log_dir)
         csv_filepath = log_filepath[:-3] + 'csv'
-        logger.configure_job_logger(log_filepath)
+        configure_job_logger(log_filepath)
 
     # This must be the first lines in the jo log, do not change
     logging.info(f'using params:\n{params}')
@@ -133,11 +146,8 @@ def start_job(x_train: np.ndarray,
 
     logging.debug(
         'using default metrics: acc, sensitivity, specificity, tp, fn')
-    metrics = ['acc',
-               utils.sensitivity,
-               utils.specificity,
-               utils.true_positives,
-               utils.false_negatives]
+    metrics = ['acc', sensitivity, specificity, true_positives,
+               false_negatives]
 
     model.compile(optimizer=model_params.optimizer,
                   loss=model_params.loss,
@@ -145,11 +155,11 @@ def start_job(x_train: np.ndarray,
 
     model_filepath = '/tmp/{}.hdf5'.format(os.environ['CUDA_VISIBLE_DEVICES'])
     logging.debug('model_filepath: {}'.format(model_filepath))
-    callbacks = utils.create_callbacks(x_train, y_train, x_valid, y_valid,
-                                       early_stopping=params.early_stopping,
-                                       reduce_lr=params.reduce_lr,
-                                       csv_file=csv_filepath,
-                                       model_file=model_filepath)
+    callbacks = create_callbacks(x_train, y_train, x_valid, y_valid,
+                                 early_stopping=params.early_stopping,
+                                 reduce_lr=params.reduce_lr,
+                                 csv_file=csv_filepath,
+                                 model_file=model_filepath)
     logging.info('training model')
     history = model.fit_generator(train_gen,
                                   epochs=params.max_epochs,
@@ -158,22 +168,17 @@ def start_job(x_train: np.ndarray,
                                   callbacks=callbacks)
 
     try:
-        blueno.gcs.upload_gcs_plots(x_train, x_valid, y_valid, model, history,
-                                    job_name,
-                                    created_at,
-                                    plot_dir=plot_dir,
-                                    id_valid=id_valid)
+        upload_gcs_plots(x_train, x_valid, y_valid, model, history,
+                         job_name, created_at, plot_dir=plot_dir,
+                         id_valid=id_valid)
     except DefaultCredentialsError as e:
         logging.warning(e)
 
     if slack_token:
         logging.info('generating slack report')
-        blueno.slack.slack_report(x_train, x_valid, y_valid, model, history,
-                                  job_name,
-                                  params,
-                                  slack_token,
-                                  plot_dir=plot_dir,
-                                  id_valid=id_valid)
+        slack_report(x_train, x_valid, y_valid, model, history,
+                     job_name, params, slack_token, plot_dir=plot_dir,
+                     id_valid=id_valid)
     else:
         logging.info('no slack token found, not generating report')
 
@@ -192,14 +197,13 @@ def start_job(x_train: np.ndarray,
         # Creates a connection to our Airflow instance
         # We don't need to remove since the process ends
         connections.create_connection(hosts=['http://104.196.51.205'])
-        elasticsearch.insert_or_ignore_filepaths(
+        insert_or_ignore_filepaths(
             pathlib.Path(log_filepath),
             pathlib.Path(csv_filepath),
         )
 
 
-def hyperoptimize(hyperparams: Union[blueno.ParamGrid,
-                                     List[blueno.ParamConfig]],
+def hyperoptimize(hyperparams: Union[ParamGrid, List[ParamConfig]],
                   username: str,
                   slack_token: str = None,
                   num_gpus=1,
@@ -218,7 +222,7 @@ def hyperoptimize(hyperparams: Union[blueno.ParamGrid,
     exist
     :return:
     """
-    if isinstance(hyperparams, blueno.ParamGrid):
+    if isinstance(hyperparams, ParamGrid):
         param_list = model_selection.ParameterGrid(hyperparams.__dict__)
     else:
         param_list = hyperparams
@@ -230,13 +234,13 @@ def hyperoptimize(hyperparams: Union[blueno.ParamGrid,
     processes = []
     for params in param_list:
         if isinstance(params, dict):
-            params = blueno.ParamConfig(**params)
+            params = ParamConfig(**params)
 
         check_data_in_sync(params)
 
         # This is where we'd run preprocessing. To run in a reasonable amount
         # of time, the raw data must be cached in-memory.
-        arrays = preprocessing.prepare_data(params, train_test_val=False)
+        arrays = prepare_data(params, train_test_val=False)
         x_train, x_valid, y_train, y_valid, id_train, id_valid = arrays
 
         # Start the model training job
@@ -286,7 +290,7 @@ def hyperoptimize(hyperparams: Union[blueno.ParamGrid,
         time.sleep(60)
 
 
-def check_data_in_sync(params: blueno.ParamConfig):
+def check_data_in_sync(params: ParamConfig):
     """
     Checks that the data is in-sync with google cloud.
 
@@ -315,18 +319,18 @@ def check_data_in_sync(params: blueno.ParamConfig):
         array_url = gcs_url + '/arrays'
 
     try:
-        is_equal = gcs.equal_array_counts(data_dir, array_url)
+        is_equal = equal_array_counts(data_dir, array_url)
     except FileNotFoundError:
         # TODO(luke): Refactor this
         if os.uname().nodename == 'gpu1708':
             logging.info(f'data on GCS does not exist locally,'
                          f' downloading data to {data_dir}')
-            gcs.download_to_gpu1708(array_url, data_dir, folder=True)
+            download_to_gpu1708(array_url, data_dir, folder=True)
             # TODO(luke): Allow web users to generate labels
             default_label_url = \
                 'gs://elvos/processed/processed-lower/labels.csv'
             labels_path = params.data.labels_path
-            gcs.download_to_gpu1708(default_label_url, labels_path)
+            download_to_gpu1708(default_label_url, labels_path)
     except DefaultCredentialsError as e:
         logging.warning(e)
         logging.warning('Will not check GCS for syncing')
@@ -350,25 +354,17 @@ def check_config(config):
     logging.debug('SLACK_TOKEN: {}'.format(config.SLACK_TOKEN))
 
 
-if __name__ == '__main__':
-    parser = ArgumentParser()
-    parser.add_argument('--config',
-                        help='The config module (ex. config_luke)',
-                        default='config-1')
-    args = parser.parse_args()
-
-    logging.info('using config {}'.format(args.config))
-    user_config = importlib.import_module(args.config)
-
+def start_train(user_config: Union[ParamGrid, list, dict]):
+    logging.info('Using config {}'.format(args.config))
     parent_log_file = pathlib.Path(
         user_config.LOG_DIR) / 'results-{}.txt'.format(
         datetime.datetime.utcnow().isoformat()
     )
-    logger.configure_parent_logger(parent_log_file)
+    configure_parent_logger(parent_log_file)
     check_config(user_config)
 
-    logging.info('checking param grid')
-    if isinstance(user_config.PARAM_GRID, blueno.ParamGrid):
+    logging.info('Checking param grid...')
+    if isinstance(user_config.PARAM_GRID, ParamGrid):
         param_grid = user_config.PARAM_GRID
     elif isinstance(user_config.PARAM_GRID, list):
         param_grid = user_config.PARAM_GRID
@@ -376,7 +372,7 @@ if __name__ == '__main__':
         logging.warning('creating param grid from dictionary, it is'
                         'recommended that you define your config'
                         'with ParamConfig')
-        param_grid = blueno.ParamGrid(**user_config.PARAM_GRID)
+        param_grid = ParamGrid(**user_config.PARAM_GRID)
     else:
         raise ValueError('user_config.PARAM_GRID must be a ParamGrid,'
                          ' list, or dict')
@@ -386,3 +382,15 @@ if __name__ == '__main__':
                   num_gpus=user_config.NUM_GPUS,
                   gpu_offset=user_config.GPU_OFFSET,
                   log_dir=user_config.LOG_DIR)
+
+
+if __name__ == '__main__':
+    parser = ArgumentParser()
+    parser.add_argument('--config',
+                        help='The config module (ex. config_luke)',
+                        default='config-1')
+    args = parser.parse_args()
+
+    logging.info('using config {}'.format(args.config))
+    user_config = importlib.import_module(args.config)
+    start_train(user_config)

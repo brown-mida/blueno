@@ -1,6 +1,7 @@
 """
 Connection logic with Google Cloud Storage.
 """
+
 import logging
 import pathlib
 import subprocess
@@ -11,8 +12,8 @@ import os
 import warnings
 from google.cloud import storage
 
-from blueno.elasticsearch import JOB_INDEX
-from blueno.slack import _create_all_plots
+from .elasticsearch import JOB_INDEX
+from .slack import _create_all_plots
 
 
 def equal_array_counts(arrays_dir: pathlib.Path,

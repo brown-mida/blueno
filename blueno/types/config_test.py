@@ -1,7 +1,7 @@
 import keras
 from sklearn import model_selection
 
-from blueno import types
+from . import config
 
 
 def test_from_dict():
@@ -41,7 +41,7 @@ def test_from_dict():
             'freeze': [False],
         }),
     }
-    param_grid = types.ParamGrid(**param_dict)
-    assert isinstance(param_grid.model[0], types.ModelConfig)
-    assert isinstance(param_grid.data[0], types.DataConfig)
-    assert isinstance(param_grid.generator[0], types.GeneratorConfig)
+    param_grid = config.ParamGrid(**param_dict)
+    assert isinstance(param_grid.model[0], config.ModelConfig)
+    assert isinstance(param_grid.data[0], config.DataConfig)
+    assert isinstance(param_grid.generator[0], config.GeneratorConfig)

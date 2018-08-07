@@ -7,7 +7,7 @@ import numpy as np
 import os
 import pandas as pd
 
-from blueno import utils
+from . import metrics
 
 
 def load_arrays(data_dir: str) -> Dict[str, np.ndarray]:
@@ -20,10 +20,10 @@ def load_arrays(data_dir: str) -> Dict[str, np.ndarray]:
 
 def load_model(model_path: str, compile=True):
     # Need to do this otherwise the model won't load
-    keras.metrics.sensitivity = utils.sensitivity
-    keras.metrics.specificity = utils.specificity
-    keras.metrics.true_positives = utils.true_positives
-    keras.metrics.false_negatives = utils.false_negatives
+    keras.metrics.sensitivity = metrics.sensitivity
+    keras.metrics.specificity = metrics.specificity
+    keras.metrics.true_positives = metrics.true_positives
+    keras.metrics.false_negatives = metrics.false_negatives
 
     model = keras.models.load_model(model_path, compile=compile)
     return model
