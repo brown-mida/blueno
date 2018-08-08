@@ -7,12 +7,14 @@ NUM_GPUS = 1
 GPU_OFFSET = 0
 LOG_DIR = '../logs/'
 SLACK_TOKEN = None
+AIRFLOW_ADDRESS = None
 PARAM_GRID = param_grid
 
 
 def main():
     start_train(PARAM_GRID, USER, num_gpus=NUM_GPUS, gpu_offset=GPU_OFFSET,
-                log_dir=LOG_DIR, slack_token=SLACK_TOKEN)
+                log_dir=LOG_DIR, slack_token=SLACK_TOKEN,
+                airflow_address=AIRFLOW_ADDRESS)
 
 
 if __name__ == '__main__':

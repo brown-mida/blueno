@@ -36,7 +36,6 @@ from typing import List, Union
 import keras
 import numpy as np
 import os
-from elasticsearch_dsl import connections
 from google.auth.exceptions import DefaultCredentialsError
 from sklearn import model_selection
 
@@ -56,9 +55,12 @@ from ..utils.metrics import (
     sensitivity,
     specificity
 )
+from ..utils.elasticsearch import (
+    insert_or_ignore_filepaths,
+    create_connection
+)
 from ..utils.slack import slack_report
 from ..utils.preprocessing import prepare_data
-from ..utils.elasticsearch import insert_or_ignore_filepaths
 from ..utils.callbacks import create_callbacks
 from ..types import ParamConfig, ParamGrid
 
@@ -73,6 +75,7 @@ def start_job(x_train: np.ndarray,
               username: str,
               params: ParamConfig,
               slack_token: str = None,
+              airflow_address: str = None,
               log_dir: str = None,
               plot_dir=None,
               id_valid: np.ndarray = None) -> None:
@@ -191,10 +194,10 @@ def start_job(x_train: np.ndarray,
     logging.info(f'end time: {end_time}')
 
     # Upload logs to Kibana
-    if log_dir:
+    if log_dir is not None and airflow_address is not None:
         # Creates a connection to our Airflow instance
         # We don't need to remove since the process ends
-        connections.create_connection(hosts=['http://104.196.51.205'])
+        create_connection(hosts=[airflow_address])
         insert_or_ignore_filepaths(
             pathlib.Path(log_filepath),
             pathlib.Path(csv_filepath),
@@ -204,6 +207,7 @@ def start_job(x_train: np.ndarray,
 def hyperoptimize(hyperparams: Union[ParamGrid, List[ParamConfig]],
                   username: str,
                   slack_token: str = None,
+                  airflow_address: str = None,
                   num_gpus=1,
                   gpu_offset=0,
                   log_dir: str = None) -> None:
@@ -261,17 +265,20 @@ def hyperoptimize(hyperparams: Union[ParamGrid, List[ParamConfig]],
             job_name = str(pathlib.Path(params.data.data_dir).parent.name)
         job_name += f'_{y_train.shape[1]}-classes'
 
-        process = multiprocessing.Process(target=job_fn,
-                                          args=(x_train, y_train,
-                                                x_valid, y_valid),
-                                          kwargs={
-                                              'params': params,
-                                              'job_name': job_name,
-                                              'username': username,
-                                              'slack_token': slack_token,
-                                              'log_dir': log_dir,
-                                              'id_valid': id_valid,
-                                          })
+        process = multiprocessing.Process(
+            target=job_fn,
+            args=(x_train, y_train,
+                  x_valid, y_valid),
+            kwargs={
+                'params': params,
+                'job_name': job_name,
+                'username': username,
+                'slack_token': slack_token,
+                'airflow_address': airflow_address,
+                'log_dir': log_dir,
+                'id_valid': id_valid,
+            }
+        )
         gpu_index += 1
         gpu_index %= num_gpus
 
@@ -339,7 +346,8 @@ def check_data_in_sync(params: ParamConfig):
 
 
 def start_train(param_grid, user, num_gpus=1, gpu_offset=0,
-                log_dir='logs/', slack_token=None, configure_logger=True):
+                log_dir='logs/', slack_token=None, airflow_address=None,
+                configure_logger=True):
     if log_dir:
         os.makedirs(log_dir, exist_ok=True)
 
@@ -363,8 +371,8 @@ def start_train(param_grid, user, num_gpus=1, gpu_offset=0,
     else:
         raise ValueError('param_grid must be a ParamGrid,'
                          ' list, or dict')
-    hyperoptimize(param_grid, user, slack_token, num_gpus, gpu_offset,
-                  log_dir)
+    hyperoptimize(param_grid, user, slack_token, airflow_address,
+                  num_gpus, gpu_offset, log_dir)
 
 
 def start_train_from_config(config):
