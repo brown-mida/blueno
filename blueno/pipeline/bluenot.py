@@ -175,6 +175,10 @@ def start_job(x_train: np.ndarray,
                          job_name, created_at, plot_dir=plot_dir,
                          id_valid=id_valid)
     except DefaultCredentialsError as e:
+        logging.warning('DefaultCredentialsError')
+        logging.warning(e)
+    except Exception as e:
+        logging.warning('Generic error')
         logging.warning(e)
 
     if slack_token:
@@ -287,12 +291,10 @@ def hyperoptimize(hyperparams: Union[ParamGrid, List[ParamConfig]],
         process.start()
         processes.append(process)
 
-        if gpu_index == 0:
-            logging.info(f'all gpus used, calling join on processes:'
-                         f' {processes}')
-        for p in processes:
+        if len(processes) == len(gpus):
+            logging.info('Waiting for GPU {} to finish...'.format(gpu_index))
+            p = processes.pop(0)
             p.join()
-        processes = []
         time.sleep(60)
 
 
