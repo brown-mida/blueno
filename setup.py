@@ -66,4 +66,11 @@ setup(
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy'
     ],
+    entry_points={
+        'console_scripts': [
+            'blueno-train=blueno.bin.train:main',
+            'blueno-preprocess=blueno.bin.preprocess:main',
+            'blueno-validate=blueno.bin.validate:main',
+        ],
+    },
 )
