@@ -22,7 +22,6 @@ tmp/
 
 # Models (weights)
 results/
-models/
 !ml/models
 notebooks/tmp/*.hdf5
 classifer_model_tuning.txt
