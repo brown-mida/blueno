@@ -13,10 +13,7 @@ def check_config(config):
     logging.debug('replace arguments with PARAM_GRID')
     logging.debug('PARAM_GRID: {}'.format(config.PARAM_GRID))
     logging.debug('USER: {}'.format(config.USER))
-    logging.debug('NUM_GPUS: {}'.format(config.NUM_GPUS))
-    logging.debug('GPU_OFFSET: {}'.format(config.GPU_OFFSET))
-    gpu_range = range(config.GPU_OFFSET, config.GPU_OFFSET + config.NUM_GPUS)
-    logging.info('using GPUs: {}'.format([x for x in gpu_range]))
+    logging.debug('GPUS: {}'.format(config.GPUS))
     logging.debug('BLUENO_HOME: {}'.format(config.BLUENO_HOME))
     logging.debug('LOG_DIR: {}'.format(config.LOG_DIR))
     logging.debug('SLACK_TOKEN: {}'.format(config.SLACK_TOKEN))
@@ -40,8 +37,7 @@ def main():
 
     start_train(user_config, user_config.USER,
                 slack_token=user_config.SLACK_TOKEN,
-                num_gpus=user_config.NUM_GPUS,
-                gpu_offset=user_config.GPU_OFFSET,
+                gpus=user_config.GPUS,
                 log_dir=user_config.LOG_DIR,
                 configure_logger=False)
 

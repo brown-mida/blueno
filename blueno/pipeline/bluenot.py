@@ -71,6 +71,7 @@ def start_job(x_train: np.ndarray,
               y_train: np.ndarray,
               x_valid: np.ndarray,
               y_valid: np.ndarray,
+              gpu: str,
               job_name: str,
               username: str,
               params: ParamConfig,
@@ -100,6 +101,7 @@ def start_job(x_train: np.ndarray,
     :param id_valid: the patient ids ordered to correspond with y_valid
     :return:
     """
+    os.environ['CUDA_VISIBLE_DEVICES'] = gpu
     num_classes = y_train.shape[1]
     created_at = datetime.datetime.utcnow().isoformat()
 
@@ -176,12 +178,12 @@ def start_job(x_train: np.ndarray,
         logging.warning(e)
 
     if slack_token:
-        logging.info('generating slack report')
+        logging.info('Slack Token exists. Generating slack report...')
         slack_report(x_train, x_valid, y_valid, model, history,
                      job_name, params, slack_token, plot_dir=plot_dir,
                      id_valid=id_valid)
     else:
-        logging.info('no slack token found, not generating report')
+        logging.info('No slack token found, not generating report.')
 
     # acc_i = model.metrics_names.index('acc')
     # TODO(luke): Document this change, originally we only upload good models,
@@ -197,19 +199,22 @@ def start_job(x_train: np.ndarray,
     if log_dir is not None and airflow_address is not None:
         # Creates a connection to our Airflow instance
         # We don't need to remove since the process ends
+        logging.info('Uploading results to Kibana...')
         create_connection(hosts=[airflow_address])
         insert_or_ignore_filepaths(
             pathlib.Path(log_filepath),
             pathlib.Path(csv_filepath),
         )
+    else:
+        logging.info(('Log does not exist or airflow address does '
+                      'not exist. Not uploading to Kibana.'))
 
 
 def hyperoptimize(hyperparams: Union[ParamGrid, List[ParamConfig]],
                   username: str,
                   slack_token: str = None,
                   airflow_address: str = None,
-                  num_gpus=1,
-                  gpu_offset=0,
+                  gpus=['0'],
                   log_dir: str = None) -> None:
     """
     Runs training jobs on input hyperparameter grid.
@@ -245,11 +250,6 @@ def hyperoptimize(hyperparams: Union[ParamGrid, List[ParamConfig]],
         arrays = prepare_data(params, train_test_val=False)
         x_train, x_valid, y_train, y_valid, id_train, id_valid = arrays
 
-        # Start the model training job
-        # Run in a separate process to avoid memory issues
-        # Note how this depends on offset
-        os.environ['CUDA_VISIBLE_DEVICES'] = f'{gpu_index + gpu_offset}'
-
         if params.job_fn is None:
             job_fn = start_job
         else:
@@ -271,6 +271,7 @@ def hyperoptimize(hyperparams: Union[ParamGrid, List[ParamConfig]],
                   x_valid, y_valid),
             kwargs={
                 'params': params,
+                'gpu': gpus[gpu_index],
                 'job_name': job_name,
                 'username': username,
                 'slack_token': slack_token,
@@ -279,16 +280,16 @@ def hyperoptimize(hyperparams: Union[ParamGrid, List[ParamConfig]],
                 'id_valid': id_valid,
             }
         )
+        logging.info('Running at GPU {}'.format(gpus[gpu_index]))
         gpu_index += 1
-        gpu_index %= num_gpus
+        gpu_index %= len(gpus)
 
-        logging.debug(f'gpu_index is now {gpu_index + gpu_offset}')
         process.start()
         processes.append(process)
+
         if gpu_index == 0:
             logging.info(f'all gpus used, calling join on processes:'
                          f' {processes}')
-        p: multiprocessing.Process
         for p in processes:
             p.join()
         processes = []
@@ -345,7 +346,7 @@ def check_data_in_sync(params: ParamConfig):
                              f' number of files')
 
 
-def start_train(param_grid, user, num_gpus=1, gpu_offset=0,
+def start_train(param_grid, user, gpus=['0'],
                 log_dir='logs/', slack_token=None, airflow_address=None,
                 configure_logger=True):
     if log_dir:
@@ -372,12 +373,11 @@ def start_train(param_grid, user, num_gpus=1, gpu_offset=0,
         raise ValueError('param_grid must be a ParamGrid,'
                          ' list, or dict')
     hyperoptimize(param_grid, user, slack_token, airflow_address,
-                  num_gpus, gpu_offset, log_dir)
+                  gpus, log_dir)
 
 
 def start_train_from_config(config):
     start_train(config.PARAM_GRID, config.USER,
-                num_gpus=config.NUM_GPUS,
-                gpu_offset=config.GPU_OFFSET,
+                gpus=config.GPUS,
                 log_dir=config.LOG_DIR,
                 slack_token=config.SLACK_TOKEN)
