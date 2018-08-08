@@ -7,7 +7,17 @@ All generator and model functions should take in **kwargs as an argument.
 """
 import typing
 
+import numpy as np
 from dataclasses import dataclass
+
+
+@dataclass
+class PreprocessConfig:
+    arrays_dir: str
+    labels_dir: str
+    processed_dir: str
+    filter_func: typing.Callable[[str, np.ndarray], bool]
+    process_func: typing.Callable[[np.ndarray], np.ndarray]
 
 
 @dataclass

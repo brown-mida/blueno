@@ -27,12 +27,10 @@ The script assumes that:
 """
 
 import datetime
-import importlib
 import logging
 import multiprocessing
 import pathlib
 import time
-from argparse import ArgumentParser
 from typing import List, Union
 
 import keras
@@ -340,57 +338,27 @@ def check_data_in_sync(params: ParamConfig):
                              f' number of files')
 
 
-def check_config(config):
-    logging.info('checking that config has all required attributes')
-    logging.debug('replace arguments with PARAM_GRID')
-    logging.debug('PARAM_GRID: {}'.format(config.PARAM_GRID))
-    logging.debug('USER: {}'.format(config.USER))
-    logging.debug('NUM_GPUS: {}'.format(config.NUM_GPUS))
-    logging.debug('GPU_OFFSET: {}'.format(config.GPU_OFFSET))
-    gpu_range = range(config.GPU_OFFSET, config.GPU_OFFSET + config.NUM_GPUS)
-    logging.info('using GPUs: {}'.format([x for x in gpu_range]))
-    logging.debug('BLUENO_HOME: {}'.format(config.BLUENO_HOME))
-    logging.debug('LOG_DIR: {}'.format(config.LOG_DIR))
-    logging.debug('SLACK_TOKEN: {}'.format(config.SLACK_TOKEN))
-
-
-def start_train(user_config: Union[ParamGrid, list, dict]):
-    logging.info('Using config {}'.format(args.config))
-    parent_log_file = pathlib.Path(
-        user_config.LOG_DIR) / 'results-{}.txt'.format(
-        datetime.datetime.utcnow().isoformat()
-    )
-    configure_parent_logger(parent_log_file)
-    check_config(user_config)
+def start_train(param_grid, user, num_gpus=1, gpu_offset=0,
+                log_dir='logs/', slack_token=None, configure_logger=True):
+    if configure_logger:
+        parent_log_file = pathlib.Path(
+            log_dir) / 'results-{}.txt'.format(
+            datetime.datetime.utcnow().isoformat()
+        )
+        configure_parent_logger(parent_log_file)
 
     logging.info('Checking param grid...')
-    if isinstance(user_config.PARAM_GRID, ParamGrid):
-        param_grid = user_config.PARAM_GRID
-    elif isinstance(user_config.PARAM_GRID, list):
-        param_grid = user_config.PARAM_GRID
-    elif isinstance(user_config.PARAM_GRID, dict):
+    if isinstance(param_grid, ParamGrid):
+        param_grid = param_grid
+    elif isinstance(param_grid, list):
+        param_grid = param_grid
+    elif isinstance(param_grid, dict):
         logging.warning('creating param grid from dictionary, it is'
                         'recommended that you define your config'
                         'with ParamConfig')
-        param_grid = ParamGrid(**user_config.PARAM_GRID)
+        param_grid = ParamGrid(**param_grid)
     else:
-        raise ValueError('user_config.PARAM_GRID must be a ParamGrid,'
+        raise ValueError('param_grid must be a ParamGrid,'
                          ' list, or dict')
-    hyperoptimize(param_grid,
-                  user_config.USER,
-                  user_config.SLACK_TOKEN,
-                  num_gpus=user_config.NUM_GPUS,
-                  gpu_offset=user_config.GPU_OFFSET,
-                  log_dir=user_config.LOG_DIR)
-
-
-if __name__ == '__main__':
-    parser = ArgumentParser()
-    parser.add_argument('--config',
-                        help='The config module (ex. config_luke)',
-                        default='config-1')
-    args = parser.parse_args()
-
-    logging.info('using config {}'.format(args.config))
-    user_config = importlib.import_module(args.config)
-    start_train(user_config)
+    hyperoptimize(param_grid, user, slack_token, num_gpus, gpu_offset,
+                  log_dir)

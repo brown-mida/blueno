@@ -1,6 +1,6 @@
 from .config import (
     ParamGrid, ParamConfig, DataConfig, ModelConfig,
-    GeneratorConfig, LukePipelineConfig,
+    GeneratorConfig, LukePipelineConfig, PreprocessConfig
 )
 
 __all__ = [
@@ -10,4 +10,5 @@ __all__ = [
     'LukePipelineConfig',
     'ModelConfig',
     'GeneratorConfig',
+    'PreprocessConfig'
 ]
