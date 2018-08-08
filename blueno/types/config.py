@@ -6,9 +6,10 @@ information around the team.
 All generator and model functions should take in **kwargs as an argument.
 """
 import typing
+from dataclasses import dataclass
 
 import numpy as np
-from dataclasses import dataclass
+from sklearn import model_selection
 
 
 @dataclass
@@ -54,10 +55,6 @@ class ModelConfig:
     model_callable: typing.Callable
     optimizer: typing.Callable
     loss: typing.Callable
-
-    dropout_rate1: int = 0.8
-    dropout_rate2: int = 0.8
-    freeze: bool = False
 
 
 @dataclass
@@ -160,3 +157,8 @@ if set(ParamConfig.__dataclass_fields__.keys()) \
         != set(ParamGrid.__dataclass_fields__.keys()):
     raise ValueError(
         'ParamConfig and ParamGrid do not have the same properties')
+
+
+def create_param_grid(config_type, params):
+    config_list = list(model_selection.ParameterGrid(params))
+    return [config_type(**m) for m in config_list]
