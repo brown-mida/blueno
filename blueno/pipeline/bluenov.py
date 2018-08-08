@@ -18,22 +18,16 @@ There are two methods to use this script:
 Currently the script will upload text results to Slack only.
 Graphs are not uploaded since they will probably not provide
 valuable information in evaluation, although this is subject to change.
-
-TODO:
-- Support multithreading (similar to bluenot.py)
-- Possibly upload results to Kibana
 """
 
 import os
-import sys
 import logging
-import argparse
-import importlib
 import pathlib
 import datetime
 import random
 import multiprocessing
 import time
+import typing
 
 import numpy as np
 import keras
@@ -42,16 +36,38 @@ from keras.callbacks import ModelCheckpoint
 from keras.models import load_model
 import sklearn.metrics
 
-from blueno.elasticsearch import search_top_models, filter_top_models
-from blueno import (
-    types, preprocessing, utils,
-    elasticsearch, logger, slack
+from ..types import (
+    DataConfig,
+    ModelConfig,
+    GeneratorConfig,
+    ParamConfig
 )
-from models.luke import resnet
-from generators.luke import standard_generators
+from ..utils.elasticsearch import (
+    search_top_models,
+    filter_top_models,
+    create_new_connection,
+    get_validation_job_from_log,
+    insert_or_ignore
+)
+from ..utils.metrics import (
+    sensitivity,
+    specificity,
+    true_positives,
+    false_negatives
+)
+from ..utils.logger import (
+    configure_parent_logger,
+    configure_job_logger
+)
+from ..utils.slack import write_iteration_results
+from ..utils.callbacks import create_callbacks
+from ..utils.preprocessing import prepare_data
+
+from ..models.luke import resnet
+from ..generators.luke import standard_generators
 
 
-def get_models_to_train(address, lower, upper, data_dir):
+def get_validation_params(address, lower, upper, data_dir):
     """
     Fetches relevant configurations to train from Kibana,
     based on the upper and lower bounds of best_val_acc
@@ -138,9 +154,9 @@ def get_models_to_train(address, lower, upper, data_dir):
         generator['generator_callable'] = standard_generators
 
         params = {
-            'data': types.DataConfig(**data_info),
-            'model': types.ModelConfig(**model),
-            'generator': types.GeneratorConfig(**generator),
+            'data': DataConfig(**data_info),
+            'model': ModelConfig(**model),
+            'generator': GeneratorConfig(**generator),
             'batch_size': doc.batch_size,
             'seed': 999,
             'val_split': 0.1,
@@ -151,7 +167,7 @@ def get_models_to_train(address, lower, upper, data_dir):
             'job_name': None
         }
 
-        data['params'] = types.ParamConfig(**params)
+        data['params'] = ParamConfig(**params)
         docs_to_train.append(data)
     return docs_to_train
 
@@ -191,7 +207,7 @@ def __load_data(params):
         train_labels, vaidation_labels, test_labels,
         train_ids, validation_ids, test_ids
     """
-    return preprocessing.prepare_data(params)
+    return prepare_data(params)
 
 
 def __train_model(params, x_train, y_train, x_valid, y_valid,
@@ -219,11 +235,8 @@ def __train_model(params, x_train, y_train, x_valid, y_valid,
     model = params.model.model_callable(input_shape=x_train.shape[1:],
                                         num_classes=y_train.shape[1],
                                         **params.model.__dict__)
-    model_metrics = ['acc',
-                     utils.sensitivity,
-                     utils.specificity,
-                     utils.true_positives,
-                     utils.false_negatives]
+    model_metrics = ['acc', sensitivity, specificity, true_positives,
+                     false_negatives]
     model.compile(
         optimizer=getattr(keras.optimizers, params.model.optimizer)(lr=1e-5),
         loss=params.model.loss,
@@ -232,18 +245,18 @@ def __train_model(params, x_train, y_train, x_valid, y_valid,
     if no_early_stopping:
         model_filename = str(datetime.datetime.now())
         model_filepath = '{}/{}.hdf5'.format(data_dir, model_filename)
-        cbs = utils.create_callbacks(x_train, y_train, x_valid, y_valid,
-                                     early_stopping=False,
-                                     reduce_lr=params.reduce_lr)
+        cbs = create_callbacks(x_train, y_train, x_valid, y_valid,
+                               early_stopping=False,
+                               reduce_lr=params.reduce_lr)
         cbs.append(ModelCheckpoint(filepath=model_filepath,
                                    save_best_only=True,
                                    monitor='val_acc',
                                    mode='max',
                                    verbose=1))
     else:
-        cbs = utils.create_callbacks(x_train, y_train, x_valid, y_valid,
-                                     early_stopping=params.early_stopping,
-                                     reduce_lr=params.reduce_lr)
+        cbs = create_callbacks(x_train, y_train, x_valid, y_valid,
+                               early_stopping=params.early_stopping,
+                               reduce_lr=params.reduce_lr)
 
     history = model.fit_generator(train_gen,
                                   epochs=params.max_epochs,
@@ -252,10 +265,10 @@ def __train_model(params, x_train, y_train, x_valid, y_valid,
                                   callbacks=cbs)
 
     if no_early_stopping:
-        metrics.sensitivity = utils.sensitivity
-        metrics.specificity = utils.specificity
-        metrics.true_positives = utils.true_positives
-        metrics.false_negatives = utils.false_negatives
+        metrics.sensitivity = sensitivity
+        metrics.specificity = specificity
+        metrics.true_positives = true_positives
+        metrics.false_negatives = false_negatives
         model = load_model(model_filepath)
         os.remove(model_filepath)
     return model, history
@@ -288,11 +301,8 @@ def evaluate_model(x_test, y_test, model, params,
                               x_train[:, :, :, 2].std()])
             x_test = (x_test - x_mean) / x_std
 
-    metrics = ['acc',
-               utils.sensitivity,
-               utils.specificity,
-               utils.true_positives,
-               utils.false_negatives]
+    metrics = ['acc', sensitivity, specificity, true_positives,
+               false_negatives]
     model.compile(optimizer=params.model.optimizer,
                   loss=params.model.loss,
                   metrics=metrics)
@@ -344,7 +354,7 @@ def iterate_eval(num_iterations, params, gpu,
             raise ValueError("Job name cannot contain '/' character")
         log_filepath = str(pathlib.Path(log_dir) / '{}.log'.format(filename))
         assert log_filepath.startswith(log_dir)
-        logger.configure_job_logger(log_filepath, level=logging.INFO)
+        configure_job_logger(log_filepath, level=logging.INFO)
 
     logging.info("----------------Evaluation-------------------")
     logging.info(params)
@@ -391,7 +401,7 @@ def iterate_eval(num_iterations, params, gpu,
             logging.info('Max val loss: {}'.format(max(history.history[l])))
 
         if slack_token is not None:
-            slack.write_iteration_results(
+            write_iteration_results(
                 params, result, slack_token, job_name=job_name,
                 job_date=job_date, purported_accuracy=purported_accuracy,
                 purported_loss=purported_loss,
@@ -408,18 +418,18 @@ def iterate_eval(num_iterations, params, gpu,
     logging.info('AUC: {}'.format(average_list[6]))
 
     if slack_token is not None:
-        slack.write_iteration_results(
+        write_iteration_results(
             params, average_list, slack_token, job_name=job_name,
             job_date=job_date, purported_accuracy=purported_accuracy,
             purported_loss=purported_loss,
             purported_sensitivity=purported_sensitivity, final=True)
 
     # Upload to Kibana
-    if log_dir:
-        val_index = elasticsearch.create_new_connection(
+    if log_dir is not None and address is not None:
+        val_index = create_new_connection(
             address, index='validation_jobs')
-        val_job = elasticsearch.get_validation_job_from_log(log_filepath)
-        elasticsearch.insert_or_ignore(val_job, index=val_index)
+        val_job = get_validation_job_from_log(log_filepath)
+        insert_or_ignore(val_job, index=val_index)
 
 
 def multiprocess(models, num_iterations, gpus, slack_token=None,
@@ -480,166 +490,20 @@ def multiprocess(models, num_iterations, gpus, slack_token=None,
             time.sleep(60)
 
 
-def parse_args(args):
-    """
-    Parse arguments for this script.
-    """
-    parser = argparse.ArgumentParser(description='Evaluation script.')
-    subparsers = parser.add_subparsers(
-        help='Arguments for specific evaluation types.',
-        dest='eval_type'
-    )
-    subparsers.required = True
+def start_validation(models: typing.List[ParamConfig],
+                     num_iterations=1, gpus=['0'], slack_token=None,
+                     no_early_stopping=False, address=None,
+                     log_dir='logs/', data_dir='tmp/',
+                     configure_logger=True):
+    if configure_logger:
+        # Set logger
+        parent_log_file = pathlib.Path(
+            log_dir) / 'eval-results-{}.txt'.format(
+            datetime.datetime.utcnow().isoformat()
+        )
+        configure_parent_logger(parent_log_file, level=logging.INFO)
 
-    param_parser = subparsers.add_parser('param-list')
-    param_parser.add_argument(
-        'param-list-config',
-        help=('Path to config file. This file must have a list of '
-              'ParamConfig objects stored in EVAL_PARAM_LIST.')
-    )
-
-    kibana_parser = subparsers.add_parser('kibana')
-    kibana_parser.add_argument('--address',
-                               help='Address to access Kibana.',
-                               default='http://104.196.51.205')
-    kibana_parser.add_argument('--lower',
-                               help='Lower bound of best_val_acc to search.',
-                               default='0.85')
-    kibana_parser.add_argument('--upper',
-                               help='Upper bound of best_val_acc to search.',
-                               default='0.93')
-
-    parser.add_argument(
-        '--gpu',
-        help=('Ids of the GPU to use (as reported by nvidia-smi). '
-              'Separated by comma, no spaces. e.g. 0,1'),
-        default=None
-    )
-    parser.add_argument(
-        '--log-dir',
-        help=('Location to store logs.'),
-        default='../logs/'
-    )
-
-    parser.add_argument(
-        '--data-dir',
-        help=('Location to store temporary files.'),
-        default='../tmp/'
-    )
-
-    parser.add_argument(
-        '--config',
-        help=('Configuration file, if you want to specify GPU and '
-              'log directories there.'),
-        default=None
-    )
-    parser.add_argument(
-        '--num-iterations',
-        help=('Number of times to test a parameter config. '
-              'Evaluation results are averaged.'),
-        default=1
-    )
-    parser.add_argument(
-        '--slack-token',
-        help=('Slack token, to upload results to slack.'),
-        default=None
-    )
-
-    parser.add_argument(
-        '--no-early-stopping',
-        help=('Saves best model after running max epochs, '
-              'instead of early stopping'),
-        action='store_true'
-    )
-
-    return parser.parse_args(args)
-
-
-def check_user_config(config):
-    """
-    Check param-list-config to see if it is valid.
-    """
-    logging.info('Checking that user config has all required attributes')
-    logging.info('LOG_DIR: {}'.format(config.LOG_DIR))
-    logging.info('DATA_DIR: {}'.format(config.DATA_DIR))
-    logging.info('gpus: {}'.format(config.gpus))
-    logging.info('num_iterations: {}'.format(config.num_iterations))
-    logging.info('SLACK_TOKEN: {}'.format(config.SLACK_TOKEN))
-    logging.info('no_early_stopping: {}'.format(config.no_early_stopping))
-    for attr in ['LOG_DIR', 'DATA_DIR', 'gpus', 'num_iterations',
-                 'SLACK_TOKEN', 'no_early_stopping']:
-        if not hasattr(config, attr):
-            raise AttributeError('User config file is missing {}'.format(attr))
-
-
-def check_config(config):
-    """
-    Check param-list-config to see if it is valid.
-    """
-    logging.info('Checking that config has all required attributes')
-    logging.info('EVAL_PARAM_LIST: {}'.format(config.EVAL_PARAM_LIST))
-    if (not (isinstance(config.EVAL_PARAM_LIST, list)) or
-       not (isinstance(config.EVAL_PARAM_LIST[0], types.ParamConfig))):
-        raise ValueError('EVAL_PARAM_LIST must be a list of ParamConfig')
-
-
-def main(args=None):
-    # Parse arguments
-    if args is None:
-        args = sys.argv[1:]
-    args = parse_args(args)
-
-    # Set config if exists
-    if args.config is not None:
-        user_config = importlib.import_module(args.config)
-        check_user_config(user_config)
-        args.log_dir = user_config.LOG_DIR
-        args.data_dir = user_config.DATA_DIR
-        args.gpu = user_config.gpus
-        args.num_iterations = user_config.num_iterations
-        args.slack_token = user_config.SLACK_TOKEN
-        args.no_early_stopping = user_config.no_early_stopping
-
-    # Set logger
-    parent_log_file = pathlib.Path(
-        args.log_dir) / 'eval-results-{}.txt'.format(
-        datetime.datetime.utcnow().isoformat()
-    )
-    logger.configure_parent_logger(parent_log_file, level=logging.INFO)
-
-    # Choose GPU to use
-    if args.gpu:
-        os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-        gpus = args.gpu.split(',')
-    else:
-        gpus = ['0']
-
-    # Set configurations
-    num_iterations = args.num_iterations
-    slack_token = args.slack_token
-    no_early_stopping = args.no_early_stopping
-
-    if args.eval_type == 'kibana':
-        # Fetch params list from Kibana to evaluate
-        models = get_models_to_train(args.address, args.lower,
-                                     args.upper, args.data_dir)
-        multiprocess(models, num_iterations, gpus, slack_token=slack_token,
-                     no_early_stopping=no_early_stopping,
-                     address=args.address, log_dir=args.log_dir,
-                     data_dir=args.data_dir)
-
-    else:
-        # Manual evaluation of a list of ParamConfig
-        logging.info('Using config {}'.format(args.param_list_config))
-        param_list_config = importlib.import_module(args.param_list_config)
-        check_config(param_list_config)
-
-        params = param_list_config.EVAL_PARAM_LIST
-        multiprocess(params, num_iterations, gpus, slack_token=slack_token,
-                     no_early_stopping=no_early_stopping,
-                     address=args.address, log_dir=args.log_dir,
-                     data_dir=args.data_dir)
-
-
-if __name__ == '__main__':
-    main()
+    multiprocess(models, num_iterations, gpus, slack_token=slack_token,
+                 no_early_stopping=no_early_stopping,
+                 address=address, log_dir=log_dir,
+                 data_dir=data_dir)
