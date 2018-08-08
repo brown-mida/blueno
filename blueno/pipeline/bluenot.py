@@ -57,7 +57,7 @@ from ..utils.metrics import (
 )
 from ..utils.elasticsearch import (
     insert_or_ignore_filepaths,
-    create_connection
+    create_new_connection
 )
 from ..utils.slack import slack_report
 from ..utils.preprocessing import prepare_data
@@ -200,7 +200,7 @@ def start_job(x_train: np.ndarray,
         # Creates a connection to our Airflow instance
         # We don't need to remove since the process ends
         logging.info('Uploading results to Kibana...')
-        create_connection(hosts=[airflow_address])
+        create_new_connection(airflow_address)
         insert_or_ignore_filepaths(
             pathlib.Path(log_filepath),
             pathlib.Path(csv_filepath),
