@@ -7,6 +7,7 @@ from blueno.types import (
     DataConfig,
     ModelConfig,
     GeneratorConfig,
+    ParamConfig,
     create_param_grid
 )
 from blueno.models.luke import resnet
@@ -33,18 +34,39 @@ class ResnetGeneratorConfig(GeneratorConfig):
 
 model_list = create_param_grid(ResnetModelConfig, {
     'model_callable': [resnet],
-    'dropout_rate1': [0.8],
-    'dropout_rate2': [0.8],
     'optimizer': [
         optimizers.Adam(lr=1e-5),
     ],
     'loss': [
         losses.categorical_crossentropy,
     ],
+    'dropout_rate1': [0.8],
+    'dropout_rate2': [0.8],
     'freeze': [False],
 })
 
 gen_list = create_param_grid(ResnetGeneratorConfig, {
     'generator_callable': [standard_generators],
     'rotation_range': [30]
+})
+
+data_list = create_param_grid(DataConfig, {
+    'data_dir': ['../data/procesed-lower-nbv/arrays'],
+    'labels_path': ['../data/processed-lower-nbv/labels.csv'],
+    'index_col': ['Anon ID'],
+    'label_col': ['occlusion_exists'],
+    'gcs_url': ['gs://elvos/processed/processed-lower-nbv']
+})
+
+param_grid = create_param_grid(ParamConfig, {
+    'data': data_list,
+    'generator': gen_list,
+    'model': model_list,
+    'model': model_list,
+    'batch_size': [8],
+    'seed': [0, 1, 2, 3, 4, 5],
+    'val_split': [0.1, 0.2, 0.3],
+    'reduce_lr': [True, False],
+    'early_stopping': [False],
+    'max_epochs': [60],
 })

@@ -340,6 +340,9 @@ def check_data_in_sync(params: ParamConfig):
 
 def start_train(param_grid, user, num_gpus=1, gpu_offset=0,
                 log_dir='logs/', slack_token=None, configure_logger=True):
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+
     if configure_logger:
         parent_log_file = pathlib.Path(
             log_dir) / 'results-{}.txt'.format(
@@ -362,3 +365,11 @@ def start_train(param_grid, user, num_gpus=1, gpu_offset=0,
                          ' list, or dict')
     hyperoptimize(param_grid, user, slack_token, num_gpus, gpu_offset,
                   log_dir)
+
+
+def start_train_from_config(config):
+    start_train(config.PARAM_GRID, config.USER,
+                num_gpus=config.NUM_GPUS,
+                gpu_offset=config.GPU_OFFSET,
+                log_dir=config.LOG_DIR,
+                slack_token=config.SLACK_TOKEN)
