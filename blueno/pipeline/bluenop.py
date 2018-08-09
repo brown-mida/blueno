@@ -107,7 +107,7 @@ def start_preprocess(datastore, arrays_dir, labels_dir, processed_dir,
     os.mkdir(local_labels_dir)
     os.mkdir(local_processed_dir)
     datastore.sync_with_datastore(arrays_dir, local_arrays_dir)
-    datastore.sync_with_datastore(labels_dir, local_labels_dir)
+    datastore.fetch_from_datastore(labels_dir, local_labels_dir)
 
     raw_arrays = load_compressed_arrays(local_arrays_dir)
     raw_labels = load_raw_labels(local_labels_dir)

@@ -47,14 +47,7 @@ def load_compressed_arrays(data_dir: str,
 
 
 def load_raw_labels(labels_dir: str, index_col='Anon ID') -> pd.DataFrame:
-    """Loads a directory containing a postives.csv and negatives.csv
+    """Loads a directory containing the labels.
     file."""
-    positives_df: pd.DataFrame = pd.read_csv(
-        pathlib.Path(labels_dir) / 'positives.csv',
-        index_col=index_col)
-    positives_df['occlusion_exists'] = 1
-    negatives_df: pd.DataFrame = pd.read_csv(
-        pathlib.Path(labels_dir) / 'negatives.csv',
-        index_col=index_col)
-    negatives_df['occlusion_exists'] = 0
-    return pd.concat([positives_df, negatives_df])
+    df = pd.read_csv(labels_dir, index_col=index_col)
+    return df
