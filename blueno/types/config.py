@@ -11,12 +11,16 @@ from dataclasses import dataclass
 import numpy as np
 from sklearn import model_selection
 
+from ..datastore import DataStore
+
 
 @dataclass
 class PreprocessConfig:
+    datastore: DataStore
     arrays_dir: str
     labels_dir: str
     processed_dir: str
+    local_tmp_dir: str
     filter_func: typing.Callable[[str, np.ndarray], bool]
     process_func: typing.Callable[[np.ndarray], np.ndarray]
 

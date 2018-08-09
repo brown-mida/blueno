@@ -9,15 +9,15 @@ loading and saving data, as well as getting rid of
 odd data (e.g. data missing labels).
 """
 
-
+import os
 import pathlib
 import typing
 import logging
 
 import numpy as np
-import os
 import pandas as pd
 from matplotlib import pyplot as plt
+from shutil import rmtree
 
 from ..utils.slack import plot_images
 from ..utils.io import load_compressed_arrays, load_raw_labels
@@ -97,7 +97,34 @@ def save_data(arrays: typing.Dict[str, np.ndarray],
         save_plots(arrays, labels, plots_dir)
 
 
-def start_preprocess(args: typing.Union[PreprocessConfig, dict]):
+def start_preprocess(datastore, arrays_dir, labels_dir, processed_dir,
+                     local_tmp_dir, filter_func, process_func):
+    os.makedirs(local_tmp_dir, exist_ok=False)
+    local_arrays_dir = os.path.join(local_tmp_dir, 'arrays/')
+    local_labels_dir = os.path.join(local_tmp_dir, 'labels/')
+    local_processed_dir = os.path.join(local_tmp_dir, 'processed/')
+    os.mkdir(local_arrays_dir)
+    os.mkdir(local_labels_dir)
+    os.mkdir(local_processed_dir)
+    datastore.sync_with_datastore(arrays_dir, local_arrays_dir)
+    datastore.sync_with_datastore(labels_dir, local_labels_dir)
+
+    raw_arrays = load_compressed_arrays(local_arrays_dir)
+    raw_labels = load_raw_labels(local_labels_dir)
+    cleaned_arrays, cleaned_labels = clean_data(raw_arrays, raw_labels)
+    filtered_arrays, filtered_labels = filter_data(cleaned_arrays,
+                                                   cleaned_labels,
+                                                   filter_func)
+    processed_arrays, processed_labels = process_data(filtered_arrays,
+                                                      filtered_labels,
+                                                      process_func)
+    save_data(processed_arrays, processed_labels, local_processed_dir)
+    datastore.push_folder_to_datastore(processed_dir,
+                                       local_processed_dir)
+    rmtree(local_tmp_dir)
+
+
+def start_preprocess_from_config(args: typing.Union[PreprocessConfig, dict]):
     """
     Runs a preprocessing job with the args.
 
@@ -115,13 +142,6 @@ def start_preprocess(args: typing.Union[PreprocessConfig, dict]):
         raise ValueError('args must be a PreprocessConfig '
                          'or dict')
 
-    raw_arrays = load_compressed_arrays(args.arrays_dir)
-    raw_labels = load_raw_labels(args.labels_dir)
-    cleaned_arrays, cleaned_labels = clean_data(raw_arrays, raw_labels)
-    filtered_arrays, filtered_labels = filter_data(cleaned_arrays,
-                                                   cleaned_labels,
-                                                   args.filter_func)
-    processed_arrays, processed_labels = process_data(filtered_arrays,
-                                                      filtered_labels,
-                                                      args.process_func)
-    save_data(processed_arrays, processed_labels, args.processed_dir)
+    start_preprocess(args.datastore, args.arrays_dir, args.labels_dir,
+                     args.processed_dir, args.local_tmp_dir,
+                     args.filter_func, args.process_func)
