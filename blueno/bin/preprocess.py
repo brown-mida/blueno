@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 import importlib
 import logging
 
-from ..pipeline import start_preprocess
+from ..pipeline import start_preprocess_from_config
 
 
 def _check_config(config):
@@ -21,7 +21,7 @@ def main():
     logging.info('using config {}'.format(args.config))
     user_config = importlib.import_module(args.config)
     _check_config(user_config)
-    start_preprocess(user_config.PREPROCESS_ARGS)
+    start_preprocess_from_config(user_config.PREPROCESS_ARGS)
 
 
 if __name__ == '__main__':
