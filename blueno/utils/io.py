@@ -46,7 +46,7 @@ def load_compressed_arrays(data_dir: str,
     return data
 
 
-def load_raw_labels(labels_dir: str, index_col='Anon ID') -> pd.DataFrame:
+def load_raw_labels(labels_dir: str, index_col) -> pd.DataFrame:
     """Loads a directory containing the labels.
     file."""
     df = pd.read_csv(labels_dir, index_col=index_col)

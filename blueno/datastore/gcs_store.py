@@ -14,6 +14,10 @@ class GcsStore(DataStore):
         self.client = storage.Client.from_service_account_json(
             credentials
         )
+        os.system(
+            'gcloud auth activate-service-account --key-file=' +
+            credentials
+        )
         self.bucket_name = bucket_name
 
     def sync_with_datastore(self, path, local_path):

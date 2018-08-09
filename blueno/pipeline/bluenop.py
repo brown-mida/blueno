@@ -59,24 +59,25 @@ def _process_arrays(arrays: typing.Dict[str, np.ndarray],
 
 def process_data(arrays, labels, process_func):
     if process_func is not None:
-        processed_arrays = _process_arrays(arrays, process_func)
-        processed_labels = labels.loc[processed_arrays.keys()]
-    assert len(processed_arrays) == len(processed_labels)
-    return processed_arrays, processed_labels
+        arrays = _process_arrays(arrays, process_func)
+        labels = labels.loc[arrays.keys()]
+    assert len(arrays) == len(labels)
+    return arrays, labels
 
 
-def save_plots(arrays, labels, dirpath: str):
+def save_plots(arrays, labels, dirpath: str, value_col: str):
     os.mkdir(dirpath)
     num_plots = (len(arrays) + 19) // 20
     for i in range(num_plots):
         print(f'saving plot number {i}')
-        plot_images(arrays, labels, 5, offset=20 * i)
+        plot_images(arrays, labels, value_col, num_cols=5, offset=20 * i)
         plt.savefig(f'{dirpath}/{20 * i}-{20 * i + 19}')
 
 
 def save_data(arrays: typing.Dict[str, np.ndarray],
               labels: pd.DataFrame,
               dirpath: str,
+              value_col: str,
               with_plots=True):
     """
     Saves the arrays and labels in the given dirpath.
@@ -96,23 +97,26 @@ def save_data(arrays: typing.Dict[str, np.ndarray],
     labels.to_csv(pathlib.Path(dirpath) / 'labels.csv')
     plots_dir = str(pathlib.Path(dirpath) / 'plots')
     if with_plots:
-        save_plots(arrays, labels, plots_dir)
+        try:
+            save_plots(arrays, labels, plots_dir, value_col)
+        except Exception as e:
+            print('Warning: Could not save plot. {}'.format(e))
 
 
-def start_preprocess(datastore, arrays_dir, labels_dir, processed_dir,
-                     local_tmp_dir, filter_func, process_func):
+def start_preprocess(datastore, arrays_dir, labels_dir, labels_index_col,
+                     labels_value_col, processed_dir, local_tmp_dir,
+                     filter_func, process_func):
     os.makedirs(local_tmp_dir, exist_ok=False)
     local_arrays_dir = os.path.join(local_tmp_dir, 'arrays/')
-    local_labels_dir = os.path.join(local_tmp_dir, 'labels/')
+    local_labels_dir = os.path.join(local_tmp_dir, 'labels.csv')
     local_processed_dir = os.path.join(local_tmp_dir, 'processed/')
     os.mkdir(local_arrays_dir)
-    os.mkdir(local_labels_dir)
     os.mkdir(local_processed_dir)
     datastore.sync_with_datastore(arrays_dir, local_arrays_dir)
     datastore.fetch_from_datastore(labels_dir, local_labels_dir)
 
     raw_arrays = load_compressed_arrays(local_arrays_dir)
-    raw_labels = load_raw_labels(local_labels_dir)
+    raw_labels = load_raw_labels(local_labels_dir, labels_index_col)
     cleaned_arrays, cleaned_labels = clean_data(raw_arrays, raw_labels)
     filtered_arrays, filtered_labels = filter_data(cleaned_arrays,
                                                    cleaned_labels,
@@ -120,7 +124,8 @@ def start_preprocess(datastore, arrays_dir, labels_dir, processed_dir,
     processed_arrays, processed_labels = process_data(filtered_arrays,
                                                       filtered_labels,
                                                       process_func)
-    save_data(processed_arrays, processed_labels, local_processed_dir)
+    save_data(processed_arrays, processed_labels, local_processed_dir,
+              labels_value_col)
     datastore.push_folder_to_datastore(processed_dir,
                                        local_processed_dir)
     rmtree(local_tmp_dir)
@@ -145,5 +150,6 @@ def start_preprocess_from_config(args: typing.Union[PreprocessConfig, dict]):
                          'or dict')
 
     start_preprocess(args.datastore, args.arrays_dir, args.labels_dir,
+                     args.labels_index_col, args.labels_value_col,
                      args.processed_dir, args.local_tmp_dir,
                      args.filter_func, args.process_func)

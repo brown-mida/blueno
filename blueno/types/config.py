@@ -19,6 +19,8 @@ class PreprocessConfig:
     datastore: DataStore
     arrays_dir: str
     labels_dir: str
+    labels_index_col: str
+    labels_value_col: str
     processed_dir: str
     local_tmp_dir: str
     filter_func: typing.Callable[[str, np.ndarray], bool]

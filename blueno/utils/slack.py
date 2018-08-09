@@ -491,6 +491,7 @@ def plot_misclassification(x,
 
 def plot_images(data: typing.Dict[str, np.ndarray],
                 labels: pd.DataFrame,
+                value_col='occlusion_exists',
                 num_cols=5,
                 limit=20,
                 offset=0):
@@ -507,17 +508,16 @@ def plot_images(data: typing.Dict[str, np.ndarray],
     # Ceiling function of len(data) / num_cols
     num_rows = (min(len(data), limit) + num_cols - 1) // num_cols
     fig = plt.figure(figsize=(10, 10))
-    for i, patient_id in enumerate(data):
+    for i, index_id in enumerate(data):
         if i < offset:
             continue
         if i >= offset + limit:
             break
         plot_num = i - offset + 1
         ax = fig.add_subplot(num_rows, num_cols, plot_num)
-        ax.set_title(f'patient: {patient_id[:4]}...')
-        label = ('positive' if labels.loc[patient_id]['occlusion_exists']
-                 else 'negative')
+        ax.set_title(f'Index: {index_id[:4]}...')
+        label = labels.loc[index_id][value_col]
         ax.set_xlabel(f'label: {label}')
-        plt.imshow(data[patient_id])
+        plt.imshow(data[index_id])
     fig.tight_layout()
     plt.plot()
