@@ -33,12 +33,13 @@ def filter_data(arrays: typing.Dict[str, np.ndarray],
     filtered_labels = labels.loc[filtered_arrays.keys()]
 
     filtered_arrays = filtered_arrays.copy()
-    filtered_ids = [id_ for id_, arr in filtered_arrays.items()
-                    if condition(id_, arr)]
-    for id_ in list(filtered_arrays):
-        if id_ not in filtered_ids:
-            del filtered_arrays[id_]
-    filtered_labels = labels.loc[filtered_ids]
+    if condition is not None:
+        filtered_ids = [id_ for id_, arr in filtered_arrays.items()
+                        if condition(id_, arr)]
+        for id_ in list(filtered_arrays):
+            if id_ not in filtered_ids:
+                del filtered_arrays[id_]
+        filtered_labels = labels.loc[filtered_ids]
 
     assert len(filtered_arrays) == len(filtered_labels)
     return filtered_arrays, filtered_labels
@@ -57,8 +58,9 @@ def _process_arrays(arrays: typing.Dict[str, np.ndarray],
 
 
 def process_data(arrays, labels, process_func):
-    processed_arrays = _process_arrays(arrays, process_func)
-    processed_labels = labels.loc[processed_arrays.keys()]  # Filter, if needed
+    if process_func is not None:
+        processed_arrays = _process_arrays(arrays, process_func)
+        processed_labels = labels.loc[processed_arrays.keys()]
     assert len(processed_arrays) == len(processed_labels)
     return processed_arrays, processed_labels
 

@@ -5,7 +5,7 @@ from shutil import copytree, rmtree, copy
 from . import DataStore
 
 
-class GcsStore(DataStore):
+class LocalStore(DataStore):
     """
     A datastore located in your local storage.
     """
