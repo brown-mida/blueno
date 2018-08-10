@@ -276,7 +276,7 @@ def hyperoptimize(param_list: Union[ParamGrid, List[ParamConfig]],
         if params.job_name:
             job_name = params.job_name
         else:
-            job_name = str(pathlib.Path(params.data.data_dir).parent.name)
+            job_name = str(pathlib.Path(params.data.arrays_dir).parent.name)
         job_name += f'_{y_train.shape[1]}-classes'
 
         process = multiprocessing.Process(

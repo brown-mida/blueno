@@ -55,7 +55,7 @@ store = GcsStore('../credentials/client_secret.json', 'elvos')
 
 data_list = create_param_grid(DataConfig, {
     'datastore': [store],
-    'arrays_dir': ['processed/procesed-lower-nbv/arrays'],
+    'arrays_dir': ['processed/processed-lower-nbv/arrays'],
     'labels_dir': ['processed/processed-lower-nbv/labels.csv'],
     'index_col': ['Anon ID'],
     'value_col': ['occlusion_exists'],

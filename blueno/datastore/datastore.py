@@ -70,9 +70,7 @@ class DataStore(object):
         os.makedirs(local_path, exist_ok=False)
         local_arrays_dir = os.path.join(local_path, 'arrays/')
         local_labels_dir = os.path.join(local_path, 'labels.csv')
-        local_processed_dir = os.path.join(local_path, 'processed/')
         os.mkdir(local_arrays_dir)
-        os.mkdir(local_processed_dir)
         fetched_data = self.fetch_folder_from_datastore(array_path,
                                                         local_arrays_dir)
         fetched_labels = self.fetch_from_datastore(label_path,

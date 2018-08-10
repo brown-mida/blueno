@@ -1,4 +1,5 @@
 import os
+import io
 import filecmp
 
 from google.cloud import storage
@@ -91,10 +92,20 @@ class GcsStore(DataStore):
         local_array_path = os.path.join(local_path, 'arrays/')
         local_label_path = os.path.join(local_path, 'labels.csv')
         bucket = self.client.get_bucket(self.bucket_name)
+
+        # Check arrays are the same
         gcs_blobs = bucket.list_blobs(prefix=array_path)
         gcs_list = set()
         for each in gcs_blobs:
             gcs_list.add(each.name.split('/')[-1])
         local_list = set(os.listdir(local_array_path))
-        return (gcs_list == local_list and
-                filecmp.cmp(label_path, local_label_path))
+        arrays_same = gcs_list == local_list
+
+        # Check labels are the same
+        label_blob = bucket.blob(label_path)
+        local_label_path_tmp = os.path.join(local_path, 'labels_tmp.csv')
+        label_blob.download_to_filename(local_label_path_tmp)
+        labels_same = filecmp.cmp(local_label_path_tmp, local_label_path)
+        os.remove(local_label_path_tmp)
+
+        return arrays_same and labels_same
