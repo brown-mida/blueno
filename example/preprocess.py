@@ -4,7 +4,6 @@ from blueno.pipeline import start_preprocess_from_config
 
 store = GcsStore('../credentials/client_secret.json', 'elvos')
 
-
 PREPROCESS_ARGS = PreprocessConfig(
     datastore=store,
     arrays_dir='test_dataset/',

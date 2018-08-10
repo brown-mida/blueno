@@ -106,14 +106,11 @@ def save_data(arrays: typing.Dict[str, np.ndarray],
 def start_preprocess(datastore, arrays_dir, labels_dir, labels_index_col,
                      labels_value_col, processed_dir, local_tmp_dir,
                      filter_func, process_func):
-    os.makedirs(local_tmp_dir, exist_ok=False)
+    datastore.sync_dataset(arrays_dir, labels_dir, local_tmp_dir)
     local_arrays_dir = os.path.join(local_tmp_dir, 'arrays/')
     local_labels_dir = os.path.join(local_tmp_dir, 'labels.csv')
     local_processed_dir = os.path.join(local_tmp_dir, 'processed/')
-    os.mkdir(local_arrays_dir)
     os.mkdir(local_processed_dir)
-    datastore.sync_with_datastore(arrays_dir, local_arrays_dir)
-    datastore.fetch_from_datastore(labels_dir, local_labels_dir)
 
     raw_arrays = load_compressed_arrays(local_arrays_dir)
     raw_labels = load_raw_labels(local_labels_dir, labels_index_col)

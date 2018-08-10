@@ -10,7 +10,7 @@ class LocalStore(DataStore):
     A datastore located in your local storage.
     """
 
-    def sync_with_datastore(self, path, local_path):
+    def fetch_folder_from_datastore(self, path, local_path):
         """
         Syncs the files of a local path to the path of the datastore
 

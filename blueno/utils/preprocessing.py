@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Dict, Tuple, Union
 
 import keras
@@ -121,8 +122,8 @@ def prepare_data(params: ParamConfig,
     if not sort:
         warnings.warn('Sort has been set to false. The split will only be'
                       ' the same only in certain conditions.')
+    logging.info(f'Using params:\n{params}')
 
-    logging.info(f'using params:\n{params}')
     # Load the arrays and labels
     data_params = params.data
     if isinstance(data_params, LukePipelineConfig):
@@ -133,16 +134,16 @@ def prepare_data(params: ParamConfig,
             data_params.mip_thickness,
             data_params.pixel_value_range,
         )
+        label_series = labels_df[data_params.label_col]
     elif isinstance(data_params, DataConfig):
-        array_dict = io.load_arrays(data_params.data_dir)
+        array_path = os.path.join(data_params.local_tmp_dir, 'arrays/')
+        label_path = os.path.join(data_params.local_tmp_dir, 'labels.csv')
+        array_dict = io.load_arrays(array_path)
         index_col = data_params.index_col
-        labels_df = pd.read_csv(data_params.labels_path,
-                                index_col=index_col)
+        labels_df = pd.read_csv(label_path, index_col=index_col)
+        label_series = labels_df[data_params.value_col]
     else:
         raise ValueError('params.data must be a subclass of DataConfig')
-
-    label_col = data_params.label_col
-    label_series = labels_df[label_col]
 
     # Convert to numpy arrays
     x, y, patient_ids = to_arrays(array_dict, label_series, sort=sort)
@@ -157,7 +158,7 @@ def prepare_data(params: ParamConfig,
 
     logging.debug(f'x shape: {x.shape}')
     logging.debug(f'y shape: {y.shape}')
-    logging.info(f'seeding to {params.seed} before shuffling')
+    logging.info(f'Seeding to {params.seed} before shuffling')
 
     x_train, x_test, y_train, y_test, ids_train, ids_test = \
         model_selection.train_test_split(

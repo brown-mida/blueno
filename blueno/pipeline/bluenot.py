@@ -214,7 +214,7 @@ def start_job(x_train: np.ndarray,
                       'not exist. Not uploading to Kibana.'))
 
 
-def hyperoptimize(hyperparams: Union[ParamGrid, List[ParamConfig]],
+def hyperoptimize(param_list: Union[ParamGrid, List[ParamConfig]],
                   username: str,
                   slack_token: str = None,
                   airflow_address: str = None,
@@ -233,21 +233,31 @@ def hyperoptimize(hyperparams: Union[ParamGrid, List[ParamConfig]],
     exist
     :return:
     """
-    if isinstance(hyperparams, ParamGrid):
-        param_list = model_selection.ParameterGrid(hyperparams.__dict__)
-    else:
-        param_list = hyperparams
-
     logging.info(
-        'optimizing grid with {} configurations'.format(len(param_list)))
+        'Optimizing grid with {} configurations'.format(len(param_list)))
 
     gpu_index = 0
     processes = []
     for params in param_list:
-        if isinstance(params, dict):
-            params = ParamConfig(**params)
 
-        check_data_in_sync(params)
+        # Check if the directory exists. If it does not, make one.
+        # If it does, then check if they are synced; if not, then
+        # raise an Error.
+        datastore = params.data.datastore
+        if not os.path.isdir(params.data.local_tmp_dir):
+            datastore.sync_dataset(params.data.arrays_dir,
+                                   params.data.labels_dir,
+                                   params.data.local_tmp_dir)
+        else:
+            if not datastore.dataset_is_equal(params.data.arrays_dir,
+                                              params.data.labels_dir,
+                                              params.data.local_tmp_dir):
+                raise ValueError(
+                    'Dataset from datastore ('
+                    f'array {params.data.arrays_dir}, '
+                    f'label {params.data.labels_dir}) and '
+                    f'local {params.data.local_tmp_dir} is different.'
+                )
 
         # This is where we'd run preprocessing. To run in a reasonable amount
         # of time, the raw data must be cached in-memory.
@@ -362,18 +372,23 @@ def start_train(param_grid, user, gpus=['0'],
         configure_parent_logger(parent_log_file)
 
     logging.info('Checking param grid...')
-    if isinstance(param_grid, ParamGrid):
+    if isinstance(param_grid, list):
         param_grid = param_grid
-    elif isinstance(param_grid, list):
-        param_grid = param_grid
+    elif isinstance(param_grid, ParamGrid):
+        logging.warning('ParamGrid specified as param_grid. It is '
+                        'recommended that you specify a list of '
+                        'ParamConfig instead.')
+        param_grid = model_selection.ParameterGrid(param_grid.__dict__)
     elif isinstance(param_grid, dict):
-        logging.warning('creating param grid from dictionary, it is'
-                        'recommended that you define your config'
-                        'with ParamConfig')
+        logging.warning('ParamGrid specified as dict. It is '
+                        'recommended that you specify a list of '
+                        'ParamConfig instead.')
+        param_grid = ParamGrid(**param_grid)
+        param_grid = model_selection.ParameterGrid(param_grid.__dict__)
         param_grid = ParamGrid(**param_grid)
     else:
-        raise ValueError('param_grid must be a ParamGrid,'
-                         ' list, or dict')
+        raise ValueError('param_grid must be a list of ParamConfig, '
+                         'a ParamGrid, or dict')
     hyperoptimize(param_grid, user, slack_token, airflow_address,
                   gpus, log_dir)
 

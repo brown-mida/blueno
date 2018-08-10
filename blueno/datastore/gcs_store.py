@@ -1,4 +1,5 @@
 import os
+import filecmp
 
 from google.cloud import storage
 
@@ -20,7 +21,7 @@ class GcsStore(DataStore):
         )
         self.bucket_name = bucket_name
 
-    def sync_with_datastore(self, path, local_path):
+    def fetch_folder_from_datastore(self, path, local_path):
         """
         Syncs the files of a local path to the path of the datastore
 
@@ -73,3 +74,27 @@ class GcsStore(DataStore):
                                                    self.bucket_name,
                                                    path))
         return exit == 0
+
+    def dataset_is_equal(self, array_path, label_path, local_path):
+        """
+        Checks if the dataset in the datastore is the same as the one
+        in the local path.
+
+        :params array_path: Path of the data in the datastore
+        :params label_path: Path of the labels in the datastore
+        :params local_path: The local path to store the fetched data
+        :return: True if data is equal, False otherwise
+        """
+        if not os.path.isdir(local_path):
+            return False
+
+        local_array_path = os.path.join(local_path, 'arrays/')
+        local_label_path = os.path.join(local_path, 'labels.csv')
+        bucket = self.client.get_bucket(self.bucket_name)
+        gcs_blobs = bucket.list_blobs(prefix=array_path)
+        gcs_list = set()
+        for each in gcs_blobs:
+            gcs_list.add(each.name.split('/')[-1])
+        local_list = set(os.listdir(local_array_path))
+        return (gcs_list == local_list and
+                filecmp.cmp(label_path, local_label_path))
