@@ -12,6 +12,7 @@ from blueno.types import (
 )
 from blueno.models.luke import resnet
 from blueno.generators.luke import standard_generators
+from blueno.datastore import GcsStore
 
 
 @dataclass
@@ -50,12 +51,15 @@ gen_list = create_param_grid(ResnetGeneratorConfig, {
     'rotation_range': [30]
 })
 
+store = GcsStore('../credentials/client_secret.json', 'elvos')
+
 data_list = create_param_grid(DataConfig, {
-    'data_dir': ['../data/procesed-lower-nbv/arrays'],
-    'labels_path': ['../data/processed-lower-nbv/labels.csv'],
+    'datastore': [store],
+    'arrays_dir': ['processed/procesed-lower-nbv/arrays'],
+    'labels_dir': ['processed/processed-lower-nbv/labels.csv'],
     'index_col': ['Anon ID'],
-    'label_col': ['occlusion_exists'],
-    'gcs_url': ['gs://elvos/processed/processed-lower-nbv']
+    'value_col': ['occlusion_exists'],
+    'local_tmp_dir': ['../data/processed-lower-nbv/']
 })
 
 param_grid = create_param_grid(ParamConfig, {
