@@ -19,8 +19,12 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from shutil import rmtree
 
+from ..utils.io import (
+    load_compressed_arrays,
+    load_arrays,
+    load_raw_labels
+)
 from ..utils.slack import plot_images
-from ..utils.io import load_compressed_arrays, load_raw_labels
 from ..utils.preprocessing import clean_data
 from ..types import PreprocessConfig
 
@@ -105,14 +109,17 @@ def save_data(arrays: typing.Dict[str, np.ndarray],
 
 def start_preprocess(datastore, arrays_dir, labels_dir, labels_index_col,
                      labels_value_col, processed_dir, local_tmp_dir,
-                     filter_func, process_func):
+                     filter_func, process_func, compressed=True):
     datastore.sync_dataset(arrays_dir, labels_dir, local_tmp_dir)
     local_arrays_dir = os.path.join(local_tmp_dir, 'arrays/')
     local_labels_dir = os.path.join(local_tmp_dir, 'labels.csv')
     local_processed_dir = os.path.join(local_tmp_dir, 'processed/')
     os.mkdir(local_processed_dir)
 
-    raw_arrays = load_compressed_arrays(local_arrays_dir)
+    if compressed:
+        raw_arrays = load_compressed_arrays(local_arrays_dir)
+    else:
+        raw_arrays = load_arrays(local_arrays_dir)
     raw_labels = load_raw_labels(local_labels_dir, labels_index_col)
     cleaned_arrays, cleaned_labels = clean_data(raw_arrays, raw_labels)
     filtered_arrays, filtered_labels = filter_data(cleaned_arrays,
@@ -149,4 +156,5 @@ def start_preprocess_from_config(args: typing.Union[PreprocessConfig, dict]):
     start_preprocess(args.datastore, args.arrays_dir, args.labels_dir,
                      args.labels_index_col, args.labels_value_col,
                      args.processed_dir, args.local_tmp_dir,
-                     args.filter_func, args.process_func)
+                     args.filter_func, args.process_func,
+                     args.arrays_compressed)

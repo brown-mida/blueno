@@ -66,7 +66,6 @@ param_grid = create_param_grid(ParamConfig, {
     'data': data_list,
     'generator': gen_list,
     'model': model_list,
-    'model': model_list,
     'batch_size': [8],
     'seed': [0, 1, 2, 3, 4, 5],
     'val_split': [0.1, 0.2, 0.3],

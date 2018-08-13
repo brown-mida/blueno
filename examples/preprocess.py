@@ -7,6 +7,7 @@ store = GcsStore('../credentials/client_secret.json', 'elvos')
 PREPROCESS_ARGS = PreprocessConfig(
     datastore=store,
     arrays_dir='test_dataset/',
+    arrays_compressed=True,
     labels_dir='labels.csv',
     labels_index_col='ID',
     labels_value_col='Label',

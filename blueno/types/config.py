@@ -20,6 +20,7 @@ from ..datastore import DataStore
 class PreprocessConfig:
     datastore: DataStore
     arrays_dir: str
+    arrays_compressed: bool
     labels_dir: str
     labels_index_col: str
     labels_value_col: str
