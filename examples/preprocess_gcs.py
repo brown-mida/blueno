@@ -12,7 +12,6 @@ PREPROCESS_ARGS = PreprocessConfig(
     labels_index_col='ID',
     labels_value_col='Label',
     processed_dir='processed_dataset/',
-    local_tmp_dir='../tmp/dataset/',
     filter_func=None,
     process_func=None
 )

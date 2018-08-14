@@ -55,11 +55,10 @@ store = LocalStore()
 
 data_list = create_param_grid(DataConfig, {
     'datastore': [store],
-    'arrays_dir': ['../data/processed_dataset/arrays/'],
-    'labels_dir': ['../data/processed_dataset/labels.csv'],
+    'data_dir': ['../data/processed_dataset/'],
     'index_col': ['ID'],
     'value_col': ['Label'],
-    'local_tmp_dir': ['/tmp/blueno/']
+    'local_dir': ['/tmp/blueno/']
 })
 
 param_grid_local = create_param_grid(ParamConfig, {
