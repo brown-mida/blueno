@@ -76,6 +76,7 @@ def save_plots(arrays, labels, dirpath: str, value_col: str):
         print(f'saving plot number {i}')
         plot_images(arrays, labels, value_col, num_cols=5, offset=20 * i)
         plt.savefig(f'{dirpath}/{20 * i}-{20 * i + 19}')
+        plt.close()
 
 
 def save_data(arrays: typing.Dict[str, np.ndarray],
@@ -121,14 +122,15 @@ def start_preprocess(datastore, arrays_dir, labels_dir, labels_index_col,
     else:
         raw_arrays = load_arrays(local_arrays_dir)
     raw_labels = load_raw_labels(local_labels_dir, labels_index_col)
-    cleaned_arrays, cleaned_labels = clean_data(raw_arrays, raw_labels)
-    filtered_arrays, filtered_labels = filter_data(cleaned_arrays,
-                                                   cleaned_labels,
+    filtered_arrays, filtered_labels = filter_data(raw_arrays,
+                                                   raw_labels,
                                                    filter_func)
     processed_arrays, processed_labels = process_data(filtered_arrays,
                                                       filtered_labels,
                                                       process_func)
-    save_data(processed_arrays, processed_labels, local_processed_dir,
+    cleaned_arrays, cleaned_labels = clean_data(processed_arrays,
+                                                processed_labels)
+    save_data(cleaned_arrays, cleaned_labels, local_processed_dir,
               labels_value_col)
     datastore.push_folder_to_datastore(processed_dir,
                                        local_processed_dir)

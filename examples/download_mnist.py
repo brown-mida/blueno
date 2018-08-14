@@ -30,7 +30,7 @@ def process_mnist(data_dir):
     print("Download complete.")
 
     # Save data to proper format
-    os.makedirs(data_dir, exist_ok=True)
+    os.makedirs(f'{data_dir}/arrays/', exist_ok=True)
     data = np.zeros((0, 28, 28))
     for name in filename[:2]:
         with gzip.open(f'/tmp/{name}', 'rb') as f:
@@ -40,7 +40,7 @@ def process_mnist(data_dir):
             data = np.concatenate((data, data_tmp))
     for i in range(data.shape[0]):
         image = data[i, :, :]
-        np.save(f'{data_dir}/{i}.npy', image)
+        np.save(f'{data_dir}/arrays/{i}.npy', image)
         print(f"Saving data... {round(i / data.shape[0] * 100, 1)}%",
               end="\r")
 

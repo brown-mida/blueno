@@ -167,7 +167,7 @@ def start_job(x_train: np.ndarray,
     history = model.fit_generator(train_gen,
                                   epochs=params.max_epochs,
                                   validation_data=valid_gen,
-                                  verbose=2,
+                                  verbose=1,
                                   callbacks=callbacks)
 
     try:
