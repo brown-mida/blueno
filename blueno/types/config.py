@@ -25,7 +25,6 @@ class PreprocessConfig:
     labels_index_col: str
     labels_value_col: str
     processed_dir: str
-    local_tmp_dir: str
     filter_func: typing.Callable[[str, np.ndarray], bool]
     process_func: typing.Callable[[np.ndarray], np.ndarray]
 
@@ -33,11 +32,10 @@ class PreprocessConfig:
 @dataclass
 class DataConfig:
     datastore: DataStore
-    arrays_dir: str
-    labels_dir: str
+    data_dir: str
     index_col: str
     value_col: str
-    local_tmp_dir: str
+    local_dir: str
 
 
 # This class is experimental and subject to a lot of change.

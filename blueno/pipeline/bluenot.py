@@ -244,19 +244,23 @@ def hyperoptimize(param_list: Union[ParamGrid, List[ParamConfig]],
         # If it does, then check if they are synced; if not, then
         # raise an Error.
         datastore = params.data.datastore
-        if not os.path.isdir(params.data.local_tmp_dir):
-            datastore.sync_dataset(params.data.arrays_dir,
-                                   params.data.labels_dir,
-                                   params.data.local_tmp_dir)
+        arrays_dir = os.path.join(params.data.data_dir, 'arrays/')
+        labels_dir = os.path.join(params.data.data_dir, 'labels.csv')
+        local_dir = os.path.join(params.data.local_dir,
+                                 pathlib.Path(params.data.data_dir).name)
+        if not os.path.isdir(local_dir):
+            datastore.sync_dataset(arrays_dir,
+                                   labels_dir,
+                                   local_dir)
         else:
-            if not datastore.dataset_is_equal(params.data.arrays_dir,
-                                              params.data.labels_dir,
-                                              params.data.local_tmp_dir):
+            if not datastore.dataset_is_equal(arrays_dir,
+                                              labels_dir,
+                                              local_dir):
                 raise ValueError(
                     'Dataset from datastore ('
-                    f'array {params.data.arrays_dir}, '
-                    f'label {params.data.labels_dir}) and '
-                    f'local {params.data.local_tmp_dir} is different.'
+                    f'array {arrays_dir}, '
+                    f'label {labels_dir}) and '
+                    f'local {local_dir} is different.'
                 )
 
         # This is where we'd run preprocessing. To run in a reasonable amount
@@ -276,7 +280,7 @@ def hyperoptimize(param_list: Union[ParamGrid, List[ParamConfig]],
         if params.job_name:
             job_name = params.job_name
         else:
-            job_name = str(pathlib.Path(params.data.arrays_dir).parent.name)
+            job_name = str(pathlib.Path(params.data.data_dir).name)
         job_name += f'_{y_train.shape[1]}-classes'
 
         process = multiprocessing.Process(

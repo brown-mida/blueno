@@ -1,5 +1,6 @@
 import logging
 import os
+import pathlib
 from typing import Dict, Tuple, Union
 
 import keras
@@ -136,8 +137,10 @@ def prepare_data(params: ParamConfig,
         )
         label_series = labels_df[data_params.label_col]
     elif isinstance(data_params, DataConfig):
-        array_path = os.path.join(data_params.local_tmp_dir, 'arrays/')
-        label_path = os.path.join(data_params.local_tmp_dir, 'labels.csv')
+        local_dir = os.path.join(data_params.local_dir,
+                                 pathlib.Path(data_params.data_dir).name)
+        array_path = os.path.join(local_dir, 'arrays/')
+        label_path = os.path.join(local_dir, 'labels.csv')
         array_dict = io.load_arrays(array_path)
         index_col = data_params.index_col
         labels_df = pd.read_csv(label_path, index_col=index_col)
