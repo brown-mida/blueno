@@ -1,19 +1,24 @@
+import numpy as np
+
 from blueno.types import PreprocessConfig
 from blueno.datastore import LocalStore
 from blueno.pipeline import start_preprocess_from_config
 
-store = LocalStore()
+
+def expand_dims(arr):
+    return np.expand_dims(arr, axis=2)
+
 
 PREPROCESS_ARGS = PreprocessConfig(
-    datastore=store,
-    arrays_dir='../data/sample_dataset/arrays/',
+    datastore=LocalStore(),
+    arrays_dir='../data/mnist_data/arrays/',
     arrays_compressed=False,
-    labels_dir='../data/sample_dataset/labels.csv',
+    labels_dir='../data/mnist_data/labels.csv',
     labels_index_col='ID',
     labels_value_col='Label',
-    processed_dir='../data/processed_dataset/',
+    processed_dir='../data/processed_mnist/',
     filter_func=None,
-    process_func=None
+    process_func=expand_dims
 )
 
 

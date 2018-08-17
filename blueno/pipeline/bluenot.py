@@ -119,7 +119,7 @@ def start_job(x_train: np.ndarray,
                            f'{job_name}-{created_at}.log')
         assert log_filepath.startswith(log_dir)
         csv_filepath = log_filepath[:-3] + 'csv'
-        configure_job_logger(log_filepath)
+        configure_job_logger(log_filepath, level=logging.INFO)
 
     # This must be the first lines in the jo log, do not change
     logging.info(f'using params:\n{params}')
@@ -389,7 +389,6 @@ def start_train(param_grid, user, gpus=['0'],
                         'ParamConfig instead.')
         param_grid = ParamGrid(**param_grid)
         param_grid = model_selection.ParameterGrid(param_grid.__dict__)
-        param_grid = ParamGrid(**param_grid)
     else:
         raise ValueError('param_grid must be a list of ParamConfig, '
                          'a ParamGrid, or dict')

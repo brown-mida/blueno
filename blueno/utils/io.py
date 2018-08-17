@@ -50,4 +50,5 @@ def load_raw_labels(labels_dir: str, index_col) -> pd.DataFrame:
     """Loads a directory containing the labels.
     file."""
     df = pd.read_csv(labels_dir, index_col=index_col)
+    df.index = df.index.map(str)
     return df

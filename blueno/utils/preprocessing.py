@@ -83,8 +83,10 @@ def to_arrays(data: Dict[str, np.ndarray],
         except KeyError:
             logging.warning(f'{id_} in data was not present in labels')
             logging.warning(f'{len(X_list)}, {len(y_list)}')
+
+    patient_ids_set = set(patient_ids)
     for id_ in labels.index.values:
-        if id_ not in patient_ids:
+        if id_ not in patient_ids_set:
             logging.warning(f'{id_} in labels was not present in data')
 
     assert len(X_list) == len(y_list)
@@ -142,8 +144,8 @@ def prepare_data(params: ParamConfig,
         array_path = os.path.join(local_dir, 'arrays/')
         label_path = os.path.join(local_dir, 'labels.csv')
         array_dict = io.load_arrays(array_path)
-        index_col = data_params.index_col
-        labels_df = pd.read_csv(label_path, index_col=index_col)
+        labels_df = pd.read_csv(label_path, index_col=data_params.index_col)
+        labels_df.index = labels_df.index.map(str)
         label_series = labels_df[data_params.value_col]
     else:
         raise ValueError('params.data must be a subclass of DataConfig')

@@ -89,12 +89,10 @@ def create_callbacks(x_train: np.ndarray, y_train: np.ndarray,
         ))
 
     if normalize:
-        x_mean = np.array([x_train[:, :, :, 0].mean(),
-                           x_train[:, :, :, 1].mean(),
-                           x_train[:, :, :, 2].mean()])
-        x_std = np.array([x_train[:, :, :, 0].std(),
-                          x_train[:, :, :, 1].std(),
-                          x_train[:, :, :, 2].std()])
+        x_mean = np.array([x_train[:, :, :, i].mean()
+                           for i in range(x_train.shape[-1])])
+        x_std = np.array([x_train[:, :, :, i].std()
+                          for i in range(x_train.shape[-1])])
         x_valid_standardized = (x_valid - x_mean) / x_std
     else:
         x_valid_standardized = x_valid
