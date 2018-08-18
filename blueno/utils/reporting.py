@@ -292,46 +292,6 @@ def save_misclassification_plots(x,
         plt.close()
 
 
-# def __save_misclassification_plots(x_valid,
-#                                    y_true,
-#                                    y_pred,
-#                                    plot_dir: pathlib.Path,
-#                                    id_valid: np.ndarray = None,
-#                                    chunk=False):
-#     """Saves the 4 true/false positive/negative plots.
-
-#     The y inputs must be binary and 1 dimensional.
-#     """
-#     assert len(x_valid) == len(y_true)
-#     if y_true.max() > 1 or y_pred.max() > 1:
-#         raise ValueError('y_true/y_pred should be binary 0/1')
-
-#     plot_name_dict = {
-#         (0, 0): tn_path,
-#         (1, 1): tp_path,
-#         (0, 1): fp_path,
-#         (1, 0): fn_path,
-#     }
-
-#     for i in (0, 1):
-#         for j in (0, 1):
-#             mask = np.logical_and(y_true == i, y_pred == j)
-#             x_filtered = np.array([x_valid[i] for i, truth in enumerate(mask)
-#                                    if truth])
-
-#             if id_valid is None:
-#                 ids_filtered = None
-#             else:
-#                 ids_filtered = id_valid[mask]
-
-#             plot_misclassification(x_filtered,
-#                                    y_true[mask],
-#                                    y_pred[mask],
-#                                    ids=ids_filtered,
-#                                    chunk=chunk)
-#             plt.savefig(plot_name_dict[(i, j)])
-
-
 def plot_misclassification(x,
                            y_true,
                            y_pred,
@@ -363,6 +323,10 @@ def plot_misclassification(x,
         ax = fig.add_subplot(num_rows, num_cols, plot_num)
         ax.set_title(f'ID: {ids[i]}')
         ax.set_xlabel(f'y_true: {y_true[i]} y_pred: {y_pred[i]}')
+
+        high = 255 if np.issubdtype(arr.dtype, np.integer) else 1
+        if arr.min() < 0 or high < arr.max():
+            arr = np.clip(arr, 0, high)
         plt.imshow(arr)
     fig.tight_layout()
     plt.plot()
@@ -397,6 +361,11 @@ def plot_images(data: typing.Dict[str, np.ndarray],
         ax.set_title(f'Index: {index_id[:4]}...')
         label = labels.loc[index_id][value_col]
         ax.set_xlabel(f'label: {label}')
+
+        arr = data[index_id]
+        high = 255 if np.issubdtype(arr.dtype, np.integer) else 1
+        if arr.min() < 0 or high < arr.max():
+            arr = np.clip(arr, 0, high)
         plt.imshow(data[index_id])
     fig.tight_layout()
     plt.plot()
