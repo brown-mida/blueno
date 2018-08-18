@@ -28,6 +28,10 @@ class PreprocessConfig:
     filter_func: typing.Callable[[str, np.ndarray], bool]
     process_func: typing.Callable[[np.ndarray], np.ndarray]
 
+    # Plots all the processed arrays to image files if set to True.
+    # Otherwise, plots only the first 100 arrays.
+    plot_all_preview: bool
+
 
 @dataclass
 class DataConfig:

@@ -25,7 +25,7 @@ from ..utils.io import (
     load_arrays,
     load_raw_labels
 )
-from ..utils.slack import plot_images
+from ..utils.reporting import plot_images
 from ..utils.preprocessing import clean_data
 from ..types import PreprocessConfig
 
@@ -70,11 +70,14 @@ def process_data(arrays, labels, process_func):
     return arrays, labels
 
 
-def save_plots(arrays, labels, dirpath: str, value_col: str):
+def save_plots(arrays, labels, dirpath: str, value_col: str,
+               plot_all_preview: bool):
     os.mkdir(dirpath)
-    num_plots = (len(arrays) + 19) // 20
+    if plot_all_preview:
+        num_plots = (len(arrays) + 19) // 20
+    else:
+        num_plots = 5
     for i in range(num_plots):
-        print(f'saving plot number {i}')
         plot_images(arrays, labels, value_col, num_cols=5, offset=20 * i)
         plt.savefig(f'{dirpath}/{20 * i}-{20 * i + 19}')
         plt.close()
@@ -84,6 +87,7 @@ def save_data(arrays: typing.Dict[str, np.ndarray],
               labels: pd.DataFrame,
               dirpath: str,
               value_col: str,
+              plot_all_preview: bool,
               with_plots=True):
     """
     Saves the arrays and labels in the given dirpath.
@@ -97,48 +101,58 @@ def save_data(arrays: typing.Dict[str, np.ndarray],
     # noinspection PyTypeChecker
     os.makedirs(pathlib.Path(dirpath) / 'arrays', exist_ok=True)
     for id_, arr in arrays.items():
-        print(f'saving {id_}')
         # noinspection PyTypeChecker
         np.save(pathlib.Path(dirpath) / 'arrays' / f'{id_}.npy', arr)
     labels.to_csv(pathlib.Path(dirpath) / 'labels.csv')
     plots_dir = str(pathlib.Path(dirpath) / 'plots')
     if with_plots:
         try:
-            save_plots(arrays, labels, plots_dir, value_col)
+            save_plots(arrays, labels, plots_dir, value_col,
+                       plot_all_preview)
         except Exception as e:
             print('Warning: Could not save plot. {}'.format(e))
 
 
 def start_preprocess(datastore, arrays_dir, labels_dir, labels_index_col,
                      labels_value_col, processed_dir, filter_func,
-                     process_func, compressed=True):
+                     process_func, compressed, plot_all_preview):
     created_at = datetime.datetime.utcnow().isoformat()
     local_tmp_dir = f'/tmp/blueno/{created_at}'
 
+    print("Syncing dataset from datastore...")
     datastore.sync_dataset(arrays_dir, labels_dir, local_tmp_dir)
     local_arrays_dir = os.path.join(local_tmp_dir, 'arrays/')
     local_labels_dir = os.path.join(local_tmp_dir, 'labels.csv')
     local_processed_dir = os.path.join(local_tmp_dir, 'processed/')
     os.mkdir(local_processed_dir)
 
+    print("Loading data...")
     if compressed:
         raw_arrays = load_compressed_arrays(local_arrays_dir)
     else:
         raw_arrays = load_arrays(local_arrays_dir)
     raw_labels = load_raw_labels(local_labels_dir, labels_index_col)
+    print("Filtering data...")
     filtered_arrays, filtered_labels = filter_data(raw_arrays,
                                                    raw_labels,
                                                    filter_func)
+    print("Processing data...")
     processed_arrays, processed_labels = process_data(filtered_arrays,
                                                       filtered_labels,
                                                       process_func)
+    print("Cleaning data...")
     cleaned_arrays, cleaned_labels = clean_data(processed_arrays,
                                                 processed_labels)
+    print("Saving data...")
     save_data(cleaned_arrays, cleaned_labels, local_processed_dir,
-              labels_value_col)
+              labels_value_col, plot_all_preview)
+
+    print("Uploading processed dataset to datastore...")
     datastore.push_folder_to_datastore(processed_dir,
                                        local_processed_dir)
     rmtree(local_tmp_dir)
+    print('Done. Processed folder is located at '
+          f'{processed_dir} in datastore.')
 
 
 def start_preprocess_from_config(args: typing.Union[PreprocessConfig, dict]):
@@ -162,4 +176,5 @@ def start_preprocess_from_config(args: typing.Union[PreprocessConfig, dict]):
     start_preprocess(args.datastore, args.arrays_dir, args.labels_dir,
                      args.labels_index_col, args.labels_value_col,
                      args.processed_dir, args.filter_func,
-                     args.process_func, args.arrays_compressed)
+                     args.process_func, args.arrays_compressed,
+                     args.plot_all_preview)

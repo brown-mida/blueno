@@ -123,7 +123,7 @@ def start_job(x_train: np.ndarray,
     # This must be the first lines in the job log, do not change
     job_logger.info(f'Using params:\n{params}')
     job_logger.info(f'Author: {username}')
-    job_logger.debug(f'Using GPU {os.environ["CUDA_VISIBLE_DEVICES"]}')
+    job_logger.info(f'Using GPU {os.environ["CUDA_VISIBLE_DEVICES"]}')
     job_logger.info('Preparing data and model for training')
 
     model_params = params.model
@@ -135,7 +135,7 @@ def start_job(x_train: np.ndarray,
         params.batch_size,
         **generator_params.__dict__)
 
-    job_logger.debug(f'Num_classes: {num_classes}')
+    job_logger.info(f'Num_classes: {num_classes}')
 
     # Construct the uncompiled model
     model: keras.Model
@@ -143,7 +143,7 @@ def start_job(x_train: np.ndarray,
                                         num_classes=num_classes,
                                         **model_params.__dict__)
 
-    job_logger.debug(
+    job_logger.info(
         'Using default metrics: acc, sensitivity, specificity, tp, fn')
     metrics = ['acc', sensitivity, specificity, true_positives,
                false_negatives]
@@ -153,7 +153,7 @@ def start_job(x_train: np.ndarray,
                   metrics=metrics)
 
     model_filepath = os.path.join(output_path, 'model.hdf5')
-    job_logger.debug(f'model_filepath: {model_filepath}')
+    job_logger.info(f'model_filepath: {model_filepath}')
     callbacks = create_callbacks(x_train, y_train, x_valid, y_valid,
                                  job_logger,
                                  user_defined_callbacks=params.callbacks,

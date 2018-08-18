@@ -32,14 +32,16 @@ def clean_data(arrays: Dict[str, np.ndarray],
     :return:
     """
     filtered_arrays = arrays.copy()
+    i = 0
+    labels_values_set = set(labels.index.values)
     for patient_id in arrays:
-        if patient_id not in labels.index.values:
+        i += 1
+        if patient_id not in labels_values_set:
             print(f'{patient_id} in arrays, but not in labels. Dropping')
             del filtered_arrays[patient_id]
 
+    # Removing duplicated items in labels
     filtered_labels = labels.copy()
-    print('Removing duplicate ids in labels:',
-          filtered_labels[filtered_labels.index.duplicated()].index)
     filtered_labels = filtered_labels[~filtered_labels.index.duplicated()]
 
     for patient_id in filtered_labels.index.values:

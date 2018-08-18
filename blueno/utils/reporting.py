@@ -366,6 +366,6 @@ def plot_images(data: typing.Dict[str, np.ndarray],
         high = 255 if np.issubdtype(arr.dtype, np.integer) else 1
         if arr.min() < 0 or high < arr.max():
             arr = np.clip(arr, 0, high)
-        plt.imshow(data[index_id])
+        plt.imshow(arr)
     fig.tight_layout()
     plt.plot()

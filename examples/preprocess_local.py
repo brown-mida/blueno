@@ -18,7 +18,8 @@ PREPROCESS_ARGS = PreprocessConfig(
     labels_value_col='Label',
     processed_dir='../data/processed_mnist/',
     filter_func=None,
-    process_func=make_three_channels
+    process_func=make_three_channels,
+    plot_all_preview=False
 )
 
 
