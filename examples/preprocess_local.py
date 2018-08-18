@@ -5,8 +5,8 @@ from blueno.datastore import LocalStore
 from blueno.pipeline import start_preprocess_from_config
 
 
-def expand_dims(arr):
-    return np.expand_dims(arr, axis=2)
+def make_three_channels(arr):
+    return np.tile(arr, (1, 1, 3))
 
 
 PREPROCESS_ARGS = PreprocessConfig(
@@ -18,7 +18,7 @@ PREPROCESS_ARGS = PreprocessConfig(
     labels_value_col='Label',
     processed_dir='../data/processed_mnist/',
     filter_func=None,
-    process_func=expand_dims
+    process_func=make_three_channels
 )
 
 

@@ -31,12 +31,12 @@ def process_mnist(data_dir):
 
     # Save data to proper format
     os.makedirs(f'{data_dir}/arrays/', exist_ok=True)
-    data = np.zeros((0, 28, 28))
+    data = np.zeros((0, 28, 28, 1))
     for name in filename[:2]:
         with gzip.open(f'/tmp/{name}', 'rb') as f:
             data_tmp = np.frombuffer(
                 f.read(), np.uint8, offset=16
-            ).reshape(-1, 28, 28)
+            ).reshape(-1, 28, 28, 1)
             data = np.concatenate((data, data_tmp))
     for i in range(data.shape[0]):
         image = data[i, :, :]

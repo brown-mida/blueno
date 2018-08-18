@@ -22,11 +22,13 @@ def configure_parent_logger(file_name,
         root_logger.addHandler(stream_handler)
 
 
-def configure_job_logger(file_path, level=logging.DEBUG):
-    root_logger = logging.getLogger()
-    root_logger.setLevel(level)
-    handler = logging.FileHandler(file_path)
-    formatter = logging.Formatter(
-        fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    root_logger.addHandler(handler)
+def configure_job_logger(job_name, file_path=None, level=logging.DEBUG):
+    logger = logging.getLogger(job_name)
+    logger.setLevel(level)
+    if file_path:
+        handler = logging.FileHandler(file_path)
+        formatter = logging.Formatter(
+            fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    return logger

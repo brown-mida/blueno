@@ -35,7 +35,7 @@ class DataConfig:
     data_dir: str
     index_col: str
     value_col: str
-    local_dir: str
+    results_dir: str
 
 
 # This class is experimental and subject to a lot of change.
@@ -89,10 +89,10 @@ class ParamConfig:
     batch_size: int
     seed: int
     val_split: float
+    callbacks: typing.Sequence[typing.Callable]
 
     max_epochs: int = 100
     early_stopping: bool = True
-    reduce_lr: bool = False
 
     job_fn: typing.Callable = None
     job_name: str = None
@@ -106,10 +106,10 @@ class ParamGrid:
     batch_size: typing.Sequence[int]
     seed: typing.Sequence[int]
     val_split: typing.Sequence[int]
+    callbacks: typing.Sequence[typing.Sequence[typing.Callable]]
 
     max_epochs: typing.Tuple[int] = (100,)
     early_stopping: typing.Sequence[bool] = (True,)
-    reduce_lr: typing.Sequence[bool] = (False,)
 
     job_fn: typing.Sequence[typing.Callable] = None
     job_name: str = None

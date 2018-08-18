@@ -11,6 +11,7 @@ from blueno.types import (
 )
 from blueno.models.basic_cnn import basic_cnn_model
 from blueno.generators.luke import standard_generators
+from blueno.utils.callbacks import CustomReduceLR
 from blueno.datastore import LocalStore
 
 
@@ -51,7 +52,7 @@ data_list = create_param_grid(DataConfig, {
     'data_dir': ['../data/processed_mnist/'],
     'index_col': ['ID'],
     'value_col': ['Label'],
-    'local_dir': ['/tmp/blueno/']
+    'results_dir': ['../data/processed_mnist/results/']
 })
 
 param_grid_local = create_param_grid(ParamConfig, {
@@ -61,7 +62,7 @@ param_grid_local = create_param_grid(ParamConfig, {
     'batch_size': [8],
     'seed': [0, 1, 2],
     'val_split': [0.1, 0.2, 0.3],
-    'reduce_lr': [True, False],
+    'callbacks': [[CustomReduceLR]],
     'early_stopping': [False],
-    'max_epochs': [60],
+    'max_epochs': [2],
 })

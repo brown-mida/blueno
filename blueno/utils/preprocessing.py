@@ -113,6 +113,7 @@ Tuple9 = Tuple[np.ndarray, np.ndarray,
 
 # TODO(luke): Refactor this function
 def prepare_data(params: ParamConfig,
+                 data_dir: str,
                  train_test_val=True,
                  sort=True) -> Union[Tuple6, Tuple9]:
     """
@@ -125,7 +126,6 @@ def prepare_data(params: ParamConfig,
     if not sort:
         warnings.warn('Sort has been set to false. The split will only be'
                       ' the same only in certain conditions.')
-    logging.info(f'Using params:\n{params}')
 
     # Load the arrays and labels
     data_params = params.data
@@ -139,7 +139,7 @@ def prepare_data(params: ParamConfig,
         )
         label_series = labels_df[data_params.label_col]
     elif isinstance(data_params, DataConfig):
-        local_dir = os.path.join(data_params.local_dir,
+        local_dir = os.path.join(data_dir,
                                  pathlib.Path(data_params.data_dir).name)
         array_path = os.path.join(local_dir, 'arrays/')
         label_path = os.path.join(local_dir, 'labels.csv')

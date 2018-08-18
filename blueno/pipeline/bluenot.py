@@ -26,6 +26,7 @@ The script assumes that:
 - you are familiar with Python and the terminal
 """
 
+import uuid
 import datetime
 import logging
 import multiprocessing
@@ -64,6 +65,8 @@ from ..utils.preprocessing import prepare_data
 from ..utils.callbacks import create_callbacks
 from ..types import ParamConfig, ParamGrid
 
+from ..utils.reporting import save_plots
+
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 
@@ -75,10 +78,9 @@ def start_job(x_train: np.ndarray,
               job_name: str,
               username: str,
               params: ParamConfig,
+              log_dir: str,
               slack_token: str = None,
               airflow_address: str = None,
-              log_dir: str = None,
-              plot_dir=None,
               id_valid: np.ndarray = None) -> None:
     """
     Builds, fits, and evaluates a model.
@@ -103,32 +105,26 @@ def start_job(x_train: np.ndarray,
     """
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu
     num_classes = y_train.shape[1]
-    created_at = datetime.datetime.utcnow().isoformat()
-
-    if plot_dir is None:
-        gpu = os.environ["CUDA_VISIBLE_DEVICES"]
-        plot_dir = pathlib.Path('tmp') / f'plots-{gpu}'
+    job_id = uuid.uuid4()
+    output_path = os.path.join(f'{log_dir}/{job_name}-{job_id}/')
+    os.makedirs(output_path, exist_ok=True)
+    logging.info(f'Starting new job: {job_id}')
+    logging.info(f'Job params: {params}')
 
     # Configure the job to log all output to a specific file
-    csv_filepath = None
-    log_filepath = None
-    if log_dir:
-        if '/' in job_name:
-            raise ValueError("Job name cannot contain '/' character")
-        log_filepath = str(pathlib.Path(log_dir) /
-                           f'{job_name}-{created_at}.log')
-        assert log_filepath.startswith(log_dir)
-        csv_filepath = log_filepath[:-3] + 'csv'
-        configure_job_logger(log_filepath, level=logging.INFO)
+    if '/' in job_name:
+        raise ValueError("Job name cannot contain '/' character")
+    log_filepath = os.path.join(output_path, 'output.log')
+    assert log_filepath.startswith(output_path)
+    csv_filepath = log_filepath[:-3] + 'csv'
+    job_logger = configure_job_logger(job_name, log_filepath,
+                                      level=logging.DEBUG)
 
-    # This must be the first lines in the jo log, do not change
-    logging.info(f'using params:\n{params}')
-    logging.info(f'author: {username}')
-
-    logging.debug(f'in start_job,'
-                  f' using gpu {os.environ["CUDA_VISIBLE_DEVICES"]}')
-
-    logging.info('preparing data and model for training')
+    # This must be the first lines in the job log, do not change
+    job_logger.info(f'Using params:\n{params}')
+    job_logger.info(f'Author: {username}')
+    job_logger.debug(f'Using GPU {os.environ["CUDA_VISIBLE_DEVICES"]}')
+    job_logger.info('Preparing data and model for training')
 
     model_params = params.model
     generator_params = params.generator
@@ -139,7 +135,7 @@ def start_job(x_train: np.ndarray,
         params.batch_size,
         **generator_params.__dict__)
 
-    logging.debug(f'num_classes is: {num_classes}')
+    job_logger.debug(f'Num_classes: {num_classes}')
 
     # Construct the uncompiled model
     model: keras.Model
@@ -147,8 +143,8 @@ def start_job(x_train: np.ndarray,
                                         num_classes=num_classes,
                                         **model_params.__dict__)
 
-    logging.debug(
-        'using default metrics: acc, sensitivity, specificity, tp, fn')
+    job_logger.debug(
+        'Using default metrics: acc, sensitivity, specificity, tp, fn')
     metrics = ['acc', sensitivity, specificity, true_positives,
                false_negatives]
 
@@ -156,70 +152,77 @@ def start_job(x_train: np.ndarray,
                   loss=model_params.loss,
                   metrics=metrics)
 
-    model_filepath = '/tmp/{}.hdf5'.format(os.environ['CUDA_VISIBLE_DEVICES'])
-    logging.debug('model_filepath: {}'.format(model_filepath))
+    model_filepath = os.path.join(output_path, 'model.hdf5')
+    job_logger.debug(f'model_filepath: {model_filepath}')
     callbacks = create_callbacks(x_train, y_train, x_valid, y_valid,
+                                 job_logger,
+                                 user_defined_callbacks=params.callbacks,
                                  early_stopping=params.early_stopping,
-                                 reduce_lr=params.reduce_lr,
                                  csv_file=csv_filepath,
                                  model_file=model_filepath)
-    logging.info('training model')
+    job_logger.info('Training model...')
     history = model.fit_generator(train_gen,
                                   epochs=params.max_epochs,
                                   validation_data=valid_gen,
                                   verbose=1,
                                   callbacks=callbacks)
 
-    try:
-        upload_gcs_plots(x_train, x_valid, y_valid, model, history,
-                         job_name, created_at, plot_dir=plot_dir,
-                         id_valid=id_valid)
-    except DefaultCredentialsError as e:
-        logging.warning('DefaultCredentialsError')
-        logging.warning(e)
-    except Exception as e:
-        logging.warning('Generic error')
-        logging.warning(e)
+    val_gen_data = []
+    val_gen_labels = []
+    for i in range(len(valid_gen)):
+        gen_data, gen_labels = next(valid_gen)
+        val_gen_data.append(gen_data)
+        val_gen_labels.append(gen_labels)
+    val_gen_data = np.vstack(val_gen_data)
+    val_gen_labels = np.vstack(val_gen_labels)
+
+    save_plots(val_gen_data, val_gen_labels, model, history,
+               plot_dir=os.path.join(output_path, 'plots/'),
+               num_classes=num_classes,
+               id_valid=id_valid)
 
     if slack_token:
-        logging.info('Slack Token exists. Generating slack report...')
+        job_logger.info('Slack Token exists. Generating slack report...')
         slack_report(x_train, x_valid, y_valid, model, history,
-                     job_name, params, slack_token, plot_dir=plot_dir,
+                     job_name, params, slack_token,
+                     plot_dir=params.results_dir,
                      id_valid=id_valid)
     else:
-        logging.info('No slack token found, not generating report.')
+        job_logger.info('No slack token found, not generating report.')
+    throw
 
     # acc_i = model.metrics_names.index('acc')
     # TODO(luke): Document this change, originally we only upload good models,
     # now we upload all models to GCS
     # if model.evaluate_generator(valid_gen)[acc_i] >= 0.8:
-    upload_model_to_gcs(job_name, created_at, model_filepath)
+    upload_model_to_gcs(job_name, job_id, model_filepath)
 
     end_time = datetime.datetime.utcnow().isoformat()
     # Do not change, this generates the ended at ES field
-    logging.info(f'end time: {end_time}')
+    job_logger.info(f'end time: {end_time}')
 
     # Upload logs to Kibana
     if log_dir is not None and airflow_address is not None:
         # Creates a connection to our Airflow instance
         # We don't need to remove since the process ends
-        logging.info('Uploading results to Kibana...')
+        job_logger.info('Uploading results to Kibana...')
         create_new_connection(airflow_address)
         insert_or_ignore_filepaths(
             pathlib.Path(log_filepath),
             pathlib.Path(csv_filepath),
         )
     else:
-        logging.info(('Log does not exist or airflow address does '
+        job_logger.info(('Log does not exist or airflow address does '
                       'not exist. Not uploading to Kibana.'))
 
 
 def hyperoptimize(param_list: Union[ParamGrid, List[ParamConfig]],
                   username: str,
+                  log_dir: str,
+                  data_dir: str,
                   slack_token: str = None,
                   airflow_address: str = None,
-                  gpus=['0'],
-                  log_dir: str = None) -> None:
+                  gpus=['0']) -> None:
     """
     Runs training jobs on input hyperparameter grid.
 
@@ -246,7 +249,7 @@ def hyperoptimize(param_list: Union[ParamGrid, List[ParamConfig]],
         datastore = params.data.datastore
         arrays_dir = os.path.join(params.data.data_dir, 'arrays/')
         labels_dir = os.path.join(params.data.data_dir, 'labels.csv')
-        local_dir = os.path.join(params.data.local_dir,
+        local_dir = os.path.join(data_dir,
                                  pathlib.Path(params.data.data_dir).name)
         if not os.path.isdir(local_dir):
             datastore.sync_dataset(arrays_dir,
@@ -265,7 +268,7 @@ def hyperoptimize(param_list: Union[ParamGrid, List[ParamConfig]],
 
         # This is where we'd run preprocessing. To run in a reasonable amount
         # of time, the raw data must be cached in-memory.
-        arrays = prepare_data(params, train_test_val=False)
+        arrays = prepare_data(params, data_dir, train_test_val=False)
         x_train, x_valid, y_train, y_valid, id_train, id_valid = arrays
 
         if params.job_fn is None:
@@ -281,7 +284,6 @@ def hyperoptimize(param_list: Union[ParamGrid, List[ParamConfig]],
             job_name = params.job_name
         else:
             job_name = str(pathlib.Path(params.data.data_dir).name)
-        job_name += f'_{y_train.shape[1]}-classes'
 
         process = multiprocessing.Process(
             target=job_fn,
@@ -362,18 +364,16 @@ def check_data_in_sync(params: ParamConfig):
                              f' number of files')
 
 
-def start_train(param_grid, user, gpus=['0'],
-                log_dir='logs/', slack_token=None, airflow_address=None,
-                configure_logger=True):
-    if log_dir:
-        os.makedirs(log_dir, exist_ok=True)
+def start_train(param_grid, user, log_dir, data_dir, gpus=['0'],
+                slack_token=None, airflow_address=None):
+    os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(data_dir, exist_ok=True)
 
-    if configure_logger:
-        parent_log_file = pathlib.Path(
-            log_dir) / 'results-{}.txt'.format(
-            datetime.datetime.utcnow().isoformat()
-        )
-        configure_parent_logger(parent_log_file)
+    parent_log_file = pathlib.Path(
+        log_dir) / 'results-{}.txt'.format(
+        datetime.datetime.utcnow().isoformat()
+    )
+    configure_parent_logger(parent_log_file)
 
     logging.info('Checking param grid...')
     if isinstance(param_grid, list):
@@ -392,12 +392,13 @@ def start_train(param_grid, user, gpus=['0'],
     else:
         raise ValueError('param_grid must be a list of ParamConfig, '
                          'a ParamGrid, or dict')
-    hyperoptimize(param_grid, user, slack_token, airflow_address,
-                  gpus, log_dir)
+    hyperoptimize(param_grid, user, log_dir, data_dir, slack_token,
+                  airflow_address, gpus)
 
 
 def start_train_from_config(config):
     start_train(config.PARAM_GRID, config.USER,
                 gpus=config.GPUS,
                 log_dir=config.LOG_DIR,
+                data_dir=config.DATA_DIR,
                 slack_token=config.SLACK_TOKEN)

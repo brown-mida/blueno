@@ -1,6 +1,5 @@
 """Custom metrics, callbacks, and plots.
 """
-import logging
 
 import keras
 import numpy as np
@@ -11,15 +10,17 @@ class AucCallback(keras.callbacks.Callback):
 
     def __init__(self,
                  x_valid_standardized: np.ndarray,
-                 y_valid: np.ndarray):
+                 y_valid: np.ndarray,
+                 job_logger):
         super().__init__()
         self.x_valid_standardized = x_valid_standardized
         self.y_valid = y_valid
+        self.job_logger = job_logger
 
     def on_epoch_end(self, epoch: int, logs=None):
         y_pred = self.model.predict(self.x_valid_standardized)
         score = sklearn.metrics.roc_auc_score(self.y_valid, y_pred)
-        logging.info(f'val_auc: {score}')
+        self.job_logger.info(f'val_auc: {score}')
 
 
 class CustomReduceLR(keras.callbacks.ReduceLROnPlateau):
@@ -29,6 +30,14 @@ class CustomReduceLR(keras.callbacks.ReduceLROnPlateau):
 
     """
 
+    def __init__(self,
+                 x_valid_standardized: np.ndarray,
+                 y_valid: np.ndarray,
+                 job_logger):
+        super().__init__(monitor='val_acc',
+                         factor=0.1,
+                         verbose=1)
+
     def on_epoch_end(self, epoch, logs=None):
         if epoch > 25:
             super(CustomReduceLR, self).on_batch_end(epoch, logs)
@@ -36,8 +45,9 @@ class CustomReduceLR(keras.callbacks.ReduceLROnPlateau):
 
 def create_callbacks(x_train: np.ndarray, y_train: np.ndarray,
                      x_valid: np.ndarray, y_valid: np.ndarray,
+                     job_logger,
+                     user_defined_callbacks=None,
                      early_stopping: bool = True,
-                     reduce_lr: bool = False,
                      csv_file: str = None,
                      model_file: str = None,
                      normalize=True):
@@ -70,13 +80,6 @@ def create_callbacks(x_train: np.ndarray, y_train: np.ndarray,
             patience=10
         ))
 
-    if reduce_lr:
-        callbacks.append(CustomReduceLR(
-            monitor='val_acc',
-            factor=0.1,
-            verbose=1,
-        ))
-
     if csv_file:
         callbacks.append(keras.callbacks.CSVLogger(csv_file, append=True))
 
@@ -97,6 +100,8 @@ def create_callbacks(x_train: np.ndarray, y_train: np.ndarray,
     else:
         x_valid_standardized = x_valid
 
-    callbacks.append(AucCallback(x_valid_standardized, y_valid))
+    if user_defined_callbacks is not None:
+        for cb in user_defined_callbacks:
+            callbacks.append(cb(x_valid_standardized, y_valid, job_logger))
 
     return callbacks
