@@ -22,6 +22,24 @@ def configure_parent_logger(file_name,
         root_logger.addHandler(stream_handler)
 
 
+def configure_main_logger(file_name,
+                          stdout=True,
+                          level=logging.DEBUG):
+    root_logger = logging.getLogger('blueno-train')
+    root_logger.setLevel(level)
+    handler = logging.FileHandler(file_name)
+    formatter = logging.Formatter(
+        fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    root_logger.addHandler(handler)
+
+    if stdout:
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+        root_logger.addHandler(stream_handler)
+    return root_logger
+
+
 def configure_job_logger(job_name, file_path=None, level=logging.DEBUG):
     logger = logging.getLogger(job_name)
     logger.setLevel(level)

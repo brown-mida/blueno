@@ -48,6 +48,7 @@ from ..utils.gcs import (
 )
 from ..utils.logger import (
     configure_job_logger,
+    configure_main_logger,
     configure_parent_logger
 )
 from ..utils.metrics import (
@@ -75,6 +76,7 @@ def start_job(x_train: np.ndarray,
               x_valid: np.ndarray,
               y_valid: np.ndarray,
               gpu: str,
+              main_logger,
               job_name: str,
               username: str,
               params: ParamConfig,
@@ -108,8 +110,8 @@ def start_job(x_train: np.ndarray,
     job_id = uuid.uuid4()
     output_path = os.path.join(f'{log_dir}/{job_name}-{job_id}/')
     os.makedirs(output_path, exist_ok=True)
-    logging.info(f'Starting new job: {job_id}')
-    logging.info(f'Job params: {params}')
+    main_logger.info(f'Starting new job: {job_id}')
+    main_logger.info(f'Job params: {params}')
 
     # Configure the job to log all output to a specific file
     if '/' in job_name:
@@ -213,16 +215,17 @@ def start_job(x_train: np.ndarray,
         )
     else:
         job_logger.info(('Log does not exist or airflow address does '
-                      'not exist. Not uploading to Kibana.'))
+                         'not exist. Not uploading to Kibana.'))
 
 
 def hyperoptimize(param_list: Union[ParamGrid, List[ParamConfig]],
                   username: str,
                   log_dir: str,
                   data_dir: str,
+                  main_logger,
                   slack_token: str = None,
                   airflow_address: str = None,
-                  gpus=['0']) -> None:
+                  gpus=['0'],) -> None:
     """
     Runs training jobs on input hyperparameter grid.
 
@@ -236,7 +239,7 @@ def hyperoptimize(param_list: Union[ParamGrid, List[ParamConfig]],
     exist
     :return:
     """
-    logging.info(
+    main_logger.info(
         'Optimizing grid with {} configurations'.format(len(param_list)))
 
     gpu_index = 0
@@ -276,7 +279,7 @@ def hyperoptimize(param_list: Union[ParamGrid, List[ParamConfig]],
         else:
             job_fn = params.job_fn
 
-        logging.debug('using job fn {}'.format(job_fn))
+        main_logger.debug('using job fn {}'.format(job_fn))
 
         # Uses the parent of the data_dir to name the job,
         # which may not work for all data formats.
@@ -292,6 +295,7 @@ def hyperoptimize(param_list: Union[ParamGrid, List[ParamConfig]],
             kwargs={
                 'params': params,
                 'gpu': gpus[gpu_index],
+                'main_logger': main_logger,
                 'job_name': job_name,
                 'username': username,
                 'slack_token': slack_token,
@@ -300,7 +304,7 @@ def hyperoptimize(param_list: Union[ParamGrid, List[ParamConfig]],
                 'id_valid': id_valid,
             }
         )
-        logging.info('Running at GPU {}'.format(gpus[gpu_index]))
+        main_logger.info('Running at GPU {}'.format(gpus[gpu_index]))
         gpu_index += 1
         gpu_index %= len(gpus)
 
@@ -308,7 +312,7 @@ def hyperoptimize(param_list: Union[ParamGrid, List[ParamConfig]],
         processes.append(process)
 
         if len(processes) == len(gpus):
-            logging.info('Waiting for GPU {} to finish...'.format(gpu_index))
+            main_logger.info(f'Waiting for GPU {gpu_index} to finish...')
             p = processes.pop(0)
             p.join()
         time.sleep(60)
@@ -373,27 +377,27 @@ def start_train(param_grid, user, log_dir, data_dir, gpus=['0'],
         log_dir) / 'results-{}.txt'.format(
         datetime.datetime.utcnow().isoformat()
     )
-    configure_parent_logger(parent_log_file)
+    main_logger = configure_main_logger(parent_log_file)
 
-    logging.info('Checking param grid...')
+    main_logger.info('Checking param grid...')
     if isinstance(param_grid, list):
         param_grid = param_grid
     elif isinstance(param_grid, ParamGrid):
-        logging.warning('ParamGrid specified as param_grid. It is '
-                        'recommended that you specify a list of '
-                        'ParamConfig instead.')
+        main_logger.warning('ParamGrid specified as param_grid. It is '
+                            'recommended that you specify a list of '
+                            'ParamConfig instead.')
         param_grid = model_selection.ParameterGrid(param_grid.__dict__)
     elif isinstance(param_grid, dict):
-        logging.warning('ParamGrid specified as dict. It is '
-                        'recommended that you specify a list of '
-                        'ParamConfig instead.')
+        main_logger.warning('ParamGrid specified as dict. It is '
+                            'recommended that you specify a list of '
+                            'ParamConfig instead.')
         param_grid = ParamGrid(**param_grid)
         param_grid = model_selection.ParameterGrid(param_grid.__dict__)
     else:
         raise ValueError('param_grid must be a list of ParamConfig, '
                          'a ParamGrid, or dict')
-    hyperoptimize(param_grid, user, log_dir, data_dir, slack_token,
-                  airflow_address, gpus)
+    hyperoptimize(param_grid, user, log_dir, data_dir, main_logger,
+                  slack_token, airflow_address, gpus)
 
 
 def start_train_from_config(config):
