@@ -17,17 +17,11 @@ from matplotlib import pyplot as plt
 # TODO(luke): Split this into a slack and a plotting module.
 
 
-def slack_report(x_train: np.ndarray,
-                 x_valid: np.ndarray,
-                 y_valid: np.ndarray,
-                 model: keras.models.Model,
-                 history: keras.callbacks.History,
+def slack_report(plot_dir: pathlib.Path,
                  name: str,
-                 params: typing.Any,
                  token: str,
-                 id_valid: np.ndarray = None,
-                 chunk: bool = False,
-                 plot_dir: pathlib.Path = pathlib.Path('/tmp')):
+                 report: str = None,
+                 channel: str = None):
     """
     Uploads a loss graph, accuacy, and confusion matrix plots in addition
     to useful data about the model to Slack.
@@ -45,26 +39,27 @@ def slack_report(x_train: np.ndarray,
     :param plot_dir: the directory to save the plots in
     :return:
     """
-    os.makedirs(str(plot_dir), exist_ok=True)
+    if channel is None:
+        channel = '#model-results'
+
     loss_path = pathlib.Path(plot_dir) / 'loss.png'
     acc_path = pathlib.Path(plot_dir) / 'acc.png'
     cm_path = pathlib.Path(plot_dir) / 'cm.png'
-    tp_path = pathlib.Path(plot_dir) / 'true_positives.png'
-    fp_path = pathlib.Path(plot_dir) / 'false_positives.png'
-    tn_path = pathlib.Path(plot_dir) / 'true_negatives.png'
-    fn_path = pathlib.Path(plot_dir) / 'false_negatives.png'
 
-    report = _create_all_plots(x_train, x_valid, y_valid, model, history,
-                               loss_path, acc_path, cm_path, tn_path, tp_path,
-                               fn_path, fp_path, chunk, id_valid)
+    plots = sorted(os.listdir(plot_dir))
+    plots = [x for x in plots if x not in ['loss.png', 'acc.png', 'cm.png']]
 
-    upload_to_slack(loss_path, f'{name}\n\nparams:\n{str(params)}', token)
-    upload_to_slack(acc_path, f'{name}\n\nparams:\n{str(params)}', token)
-    upload_to_slack(cm_path, report, token)
-    upload_to_slack(fp_path, f'{name}\n\nfalse positives', token)
-    upload_to_slack(fn_path, f'{name}\n\nfalse negatives', token)
-    upload_to_slack(tp_path, f'{name}\n\ntrue positives', token)
-    upload_to_slack(tn_path, f'{name}\n\ntrue negatives', token)
+    upload_to_slack(loss_path, f'{name}\n\nLoss', token, channel)
+    upload_to_slack(acc_path, f'{name}\n\nAccuracy', token, channel)
+    if report is not None:
+        upload_to_slack(cm_path, report, token, channel)
+    else:
+        upload_to_slack(cm_path, f'{name}\n\nConfusion Matrix',
+                        token, channel)
+
+    for img in plots:
+        img_path = pathlib.Path(plot_dir) / img
+        upload_to_slack(img_path, f'{name}\n\n{img}', token, channel)
 
 
 def _create_all_plots(
@@ -82,7 +77,7 @@ def _create_all_plots(
         fp_path: pathlib.Path,
         chunk: bool = False,
         id_valid: np.ndarray = None):
-    """Saves all plots to the given paths.
+    """DEPRECATED. DELETE.
     """
     save_history(history, loss_path, acc_path)
     # TODO: Refactor this
@@ -119,209 +114,6 @@ def _create_all_plots(
                                         id_valid=id_valid,
                                         chunk=chunk)
     return report
-
-
-def save_history(history: keras.callbacks.History,
-                 loss_path: pathlib.Path,
-                 acc_path: pathlib.Path):
-    """
-    Saves plots of the loss/acc over epochs in the given paths.
-
-    :param history:
-    :param loss_path:
-    :param acc_path:
-    :return:
-    """
-    loss_list = [s for s in history.history.keys() if
-                 'loss' in s and 'val' not in s]
-    val_loss_list = [s for s in history.history.keys() if
-                     'loss' in s and 'val' in s]
-    acc_list = [s for s in history.history.keys() if
-                'acc' in s and 'val' not in s]
-    val_acc_list = [s for s in history.history.keys() if
-                    'acc' in s and 'val' in s]
-
-    if len(loss_list) == 0:
-        print('Loss is missing in history')
-        return
-
-    epochs = range(1, len(history.history[loss_list[0]]) + 1)
-
-    plt.figure()
-    for l in loss_list:
-        plt.plot(epochs, history.history[l], 'b',
-                 label='Training loss (' + str(
-                     str(format(history.history[l][-1], '.5f')) + ')'))
-    for l in val_loss_list:
-        plt.plot(epochs, history.history[l], 'g',
-                 label='Validation loss (' + str(
-                     str(format(history.history[l][-1], '.5f')) + ')'))
-
-    plt.title('Loss')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.savefig(loss_path)
-
-    plt.figure()
-    for l in acc_list:
-        plt.plot(epochs, history.history[l], 'b',
-                 label='Training accuracy (' + str(
-                     format(history.history[l][-1], '.5f')) + ')')
-    for l in val_acc_list:
-        plt.plot(epochs, history.history[l], 'g',
-                 label='Validation accuracy (' + str(
-                     format(history.history[l][-1], '.5f')) + ')')
-
-    plt.title('Accuracy')
-    plt.xlabel('Epochs')
-    plt.ylabel('Accuracy')
-    plt.legend()
-    plt.savefig(acc_path)
-
-
-def save_confusion_matrix(cm, classes,
-                          cm_path: pathlib.Path,
-                          normalize=False,
-                          title='Confusion matrix',
-                          cmap=plt.cm.Blues):
-    """
-    This function prints, plots, and saves the confusion matrix.
-    Normalization can be applied by setting `normalize=True`.
-    """
-    if normalize:
-        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-        print("Normalized confusion matrix")
-    else:
-        print('Confusion matrix, without normalization')
-
-    print(cm)
-
-    plt.figure()
-    plt.imshow(cm, interpolation='nearest', cmap=cmap)
-    plt.title(title)
-    plt.colorbar()
-    tick_marks = np.arange(len(classes))
-    plt.xticks(tick_marks, classes, rotation=45)
-    plt.yticks(tick_marks, classes)
-
-    fmt = '.2f' if normalize else 'd'
-    thresh = cm.max() / 2.
-    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
-        plt.text(j, i, format(cm[i, j], fmt),
-                 horizontalalignment="center",
-                 color="white" if cm[i, j] > thresh else "black")
-
-    plt.tight_layout()
-    plt.ylabel('True label')
-    plt.xlabel('Predicted label')
-
-    plt.savefig(cm_path)
-
-
-def full_multiclass_report(model: keras.models.Model,
-                           x: np.ndarray,
-                           y_true: np.ndarray,
-                           classes: typing.Sequence,
-                           cm_path: pathlib.Path,
-                           tp_path: pathlib.Path,
-                           tn_path: pathlib.Path,
-                           fp_path: pathlib.Path,
-                           fn_path: pathlib.Path,
-                           id_valid: np.ndarray = None,
-                           chunk=False):
-    """
-    Builds a report containing the following:
-        - accuracy
-        - AUC
-        - classification report
-        - confusion matrix
-        - 7/31/2018 metrics
-
-    The output is the report as a string.
-
-    The report also generates a confusion matrix plot and tp/fp examples.
-
-    :param model:
-    :param x:
-    :param y_true:
-    :param classes:
-    :param id_valid
-    :param chunk
-    :return:
-    """
-    # TODO(luke): Split this into separate functions.
-    y_proba = model.predict(x, batch_size=8)
-    assert y_true.shape == y_proba.shape
-
-    if y_proba.shape[-1] == 1:
-        y_pred = (y_proba > 0.5).astype('int32')
-    else:
-        y_pred = y_proba.argmax(axis=1)
-        y_true = y_true.argmax(axis=1)
-
-    assert y_pred.shape == y_true.shape, \
-        f'y_pred.shape: {y_pred.shape} must equal y_true.shape: {y_true.shape}'
-
-    comment = "Accuracy: " + str(
-        sklearn.metrics.accuracy_score(y_true, y_pred))
-    comment += '\n'
-
-    # Assuming 0 is the negative label
-    y_true_binary = y_true > 0
-    y_pred_binary = y_pred > 0
-    score = sklearn.metrics.roc_auc_score(y_true_binary,
-                                          y_pred_binary)
-
-    # Do not change the line below, it affects reporting._extract_auc
-    comment += f'AUC: {score}\n'
-    comment += f'Assuming {0} is the negative label'
-    comment += '\n\n'
-
-    comment += "Classification Report\n"
-    comment += sklearn.metrics.classification_report(y_true, y_pred, digits=5)
-
-    cnf_matrix = sklearn.metrics.confusion_matrix(y_true, y_pred)
-    comment += '\n'
-    comment += str(cnf_matrix)
-    save_confusion_matrix(cnf_matrix, classes=classes, cm_path=cm_path)
-
-    # Compute additional metrics for the 7/31 paper
-    try:
-        tn, fp, fn, tp = cnf_matrix.ravel()
-        comment += f'\n\nAdditional statistics:\n'
-        sensitivity = tp / (tp + fn)
-        comment += f'Sensitivity: {sensitivity}\n'
-        specificity = tn / (tn + fp)
-        comment += f'Specificity: {tn / (tn + fp)}\n'
-        comment += f'Precision: {tp / (tp + fp)}\n'
-        total_acc = (tp + tn) / (tp + tn + fp + fn)
-        random_acc = (((tn + fp) * (tn + fn) + (fn + tp) * (fp + tp))
-                      / (tp + tn + fp + fn) ** 2)
-        comment += f'\n\nNamed statistics:\n'
-        kappa = (total_acc - random_acc) / (1 - random_acc)
-        comment += f'Cohen\'s Kappa: {kappa}\n'
-        youdens = sensitivity - (1 - specificity)
-        comment += f'Youden\'s index: {youdens}\n'
-
-        comment += f'\n\nOther sklearn statistics:\n'
-        log_loss = sklearn.metrics.classification.log_loss(y_true, y_pred)
-        comment += f'Log loss: {log_loss}\n'
-        comment += f'F-1: {sklearn.metrics.f1_score(y_true, y_pred)}\n'
-    except ValueError as e:
-        comment += '\nCould not add additional statistics (tp, fp, etc.)'
-        comment += str(e)
-
-    save_misclassification_plots(x,
-                                 y_true_binary,
-                                 y_pred_binary,
-                                 id_valid=id_valid,
-                                 chunk=chunk,
-                                 tp_path=tp_path,
-                                 fp_path=fp_path,
-                                 tn_path=tn_path,
-                                 fn_path=fn_path)
-    return comment
 
 
 def write_to_slack(comment, token):
@@ -401,123 +193,3 @@ def upload_to_slack(filename,
                       params=payload,
                       files=my_file)
     return r
-
-
-def save_misclassification_plots(x_valid,
-                                 y_true,
-                                 y_pred,
-                                 tp_path: pathlib.Path,
-                                 tn_path: pathlib.Path,
-                                 fp_path: pathlib.Path,
-                                 fn_path: pathlib.Path,
-                                 id_valid: np.ndarray = None,
-                                 chunk=False):
-    """Saves the 4 true/false positive/negative plots.
-
-    The y inputs must be binary and 1 dimensional.
-    """
-    assert len(x_valid) == len(y_true)
-    if y_true.max() > 1 or y_pred.max() > 1:
-        raise ValueError('y_true/y_pred should be binary 0/1')
-
-    plot_name_dict = {
-        (0, 0): tn_path,
-        (1, 1): tp_path,
-        (0, 1): fp_path,
-        (1, 0): fn_path,
-    }
-
-    for i in (0, 1):
-        for j in (0, 1):
-            mask = np.logical_and(y_true == i, y_pred == j)
-            x_filtered = np.array([x_valid[i] for i, truth in enumerate(mask)
-                                   if truth])
-
-            if id_valid is None:
-                ids_filtered = None
-            else:
-                ids_filtered = id_valid[mask]
-
-            plot_misclassification(x_filtered,
-                                   y_true[mask],
-                                   y_pred[mask],
-                                   ids=ids_filtered,
-                                   chunk=chunk)
-            plt.savefig(plot_name_dict[(i, j)])
-
-
-def plot_misclassification(x,
-                           y_true,
-                           y_pred,
-                           num_cols=5,
-                           limit=20,
-                           offset=0,
-                           ids: np.ndarray = None,
-                           chunk=False):
-    """
-    Plots the figures with labels and predictions.
-
-    :param x:
-    :param y_true:
-    :param y_pred:
-    :param num_cols:
-    :param limit:
-    :param offset:
-    :param ids:
-    :param chunk:
-    :return:
-    """
-    num_rows = (min(len(x), limit) + num_cols - 1) // num_cols
-    fig = plt.figure(figsize=(10, 10))
-    for i, arr in enumerate(x):
-        if i < offset:
-            continue
-        if i >= offset + limit:
-            break
-        plot_num = i - offset + 1
-        ax = fig.add_subplot(num_rows, num_cols, plot_num)
-        if ids is not None:
-            ax.set_title(f'patient: {ids[i][:4]}...')
-        ax.set_xlabel(f'y_true: {y_true[i]} y_pred: {y_pred[i]}')
-        if chunk:
-            mip = np.max(arr, axis=0)
-            mip = np.reshape(mip, (32, 32))
-            plt.imshow(mip)
-        else:
-            plt.imshow(arr)  # Multiply by 255 here for
-    fig.tight_layout()
-    plt.plot()
-
-
-def plot_images(data: typing.Dict[str, np.ndarray],
-                labels: pd.DataFrame,
-                value_col='occlusion_exists',
-                num_cols=5,
-                limit=20,
-                offset=0):
-    """
-    Plots limit images in a single plot.
-
-    :param data:
-    :param labels:
-    :param num_cols:
-    :param limit: the number of images to plot
-    :param offset:
-    :return:
-    """
-    # Ceiling function of len(data) / num_cols
-    num_rows = (min(len(data), limit) + num_cols - 1) // num_cols
-    fig = plt.figure(figsize=(10, 10))
-    for i, index_id in enumerate(data):
-        if i < offset:
-            continue
-        if i >= offset + limit:
-            break
-        plot_num = i - offset + 1
-        ax = fig.add_subplot(num_rows, num_cols, plot_num)
-        ax.set_title(f'Index: {index_id[:4]}...')
-        label = labels.loc[index_id][value_col]
-        ax.set_xlabel(f'label: {label}')
-        plt.imshow(data[index_id])
-    fig.tight_layout()
-    plt.plot()

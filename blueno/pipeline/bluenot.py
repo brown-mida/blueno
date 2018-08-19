@@ -66,7 +66,7 @@ from ..utils.preprocessing import prepare_data
 from ..utils.callbacks import create_callbacks
 from ..types import ParamConfig, ParamGrid
 
-from ..utils.reporting import save_plots
+from ..utils.reporting import generate_report
 
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
@@ -82,6 +82,7 @@ def start_job(x_train: np.ndarray,
               params: ParamConfig,
               log_dir: str,
               slack_token: str = None,
+              slack_channel: str = None,
               airflow_address: str = None,
               id_valid: np.ndarray = None) -> None:
     """
@@ -178,20 +179,17 @@ def start_job(x_train: np.ndarray,
     val_gen_data = np.vstack(val_gen_data)
     val_gen_labels = np.vstack(val_gen_labels)
 
-    save_plots(val_gen_data, val_gen_labels, model, history,
-               plot_dir=os.path.join(output_path, 'plots/'),
-               num_classes=num_classes,
-               id_valid=id_valid)
+    report_message = generate_report(
+        val_gen_data, val_gen_labels, model,
+        history, plot_dir=os.path.join(output_path, 'plots/'),
+        num_classes=num_classes, id_valid=id_valid)
 
     if slack_token:
         job_logger.info('Slack Token exists. Generating slack report...')
-        slack_report(x_train, x_valid, y_valid, model, history,
-                     job_name, params, slack_token,
-                     plot_dir=params.results_dir,
-                     id_valid=id_valid)
+        slack_report(os.path.join(output_path, 'plots/'),
+                     job_name, slack_token, report_message, slack_channel)
     else:
         job_logger.info('No slack token found, not generating report.')
-    throw
 
     # acc_i = model.metrics_names.index('acc')
     # TODO(luke): Document this change, originally we only upload good models,
@@ -224,6 +222,7 @@ def hyperoptimize(param_list: Union[ParamGrid, List[ParamConfig]],
                   data_dir: str,
                   main_logger,
                   slack_token: str = None,
+                  slack_channel: str = None,
                   airflow_address: str = None,
                   gpus=['0'],) -> None:
     """
@@ -299,6 +298,7 @@ def hyperoptimize(param_list: Union[ParamGrid, List[ParamConfig]],
                 'job_name': job_name,
                 'username': username,
                 'slack_token': slack_token,
+                'slack_channel': slack_channel,
                 'airflow_address': airflow_address,
                 'log_dir': log_dir,
                 'id_valid': id_valid,
@@ -369,7 +369,8 @@ def check_data_in_sync(params: ParamConfig):
 
 
 def start_train(param_grid, user, log_dir, data_dir, gpus=['0'],
-                slack_token=None, airflow_address=None):
+                slack_token=None, slack_channel=None,
+                airflow_address=None):
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(data_dir, exist_ok=True)
 
@@ -397,7 +398,7 @@ def start_train(param_grid, user, log_dir, data_dir, gpus=['0'],
         raise ValueError('param_grid must be a list of ParamConfig, '
                          'a ParamGrid, or dict')
     hyperoptimize(param_grid, user, log_dir, data_dir, main_logger,
-                  slack_token, airflow_address, gpus)
+                  slack_token, slack_channel, airflow_address, gpus)
 
 
 def start_train_from_config(config):
@@ -405,4 +406,5 @@ def start_train_from_config(config):
                 gpus=config.GPUS,
                 log_dir=config.LOG_DIR,
                 data_dir=config.DATA_DIR,
-                slack_token=config.SLACK_TOKEN)
+                slack_token=config.SLACK_TOKEN,
+                slack_channel=config.SLACK_CHANNEL)

@@ -14,13 +14,13 @@ matplotlib.use('Agg')  # noqa: E402
 from matplotlib import pyplot as plt
 
 
-def save_plots(x_valid: np.ndarray,
-               y_valid: np.ndarray,
-               model: keras.models.Model,
-               history: keras.callbacks.History,
-               plot_dir: str,
-               num_classes: int,
-               id_valid: np.ndarray):
+def generate_report(x_valid: np.ndarray,
+                    y_valid: np.ndarray,
+                    model: keras.models.Model,
+                    history: keras.callbacks.History,
+                    plot_dir: str,
+                    num_classes: int,
+                    id_valid: np.ndarray):
     """
     Uploads a loss graph, accuracy, and confusion matrix plots in addition
     to useful data about the model to gcs.
