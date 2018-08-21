@@ -9,7 +9,11 @@ All generator and model functions should take in **kwargs as an argument.
 
 import typing
 from dataclasses import dataclass
+import inspect
+import copy
 
+import tensorflow as tf
+from keras import backend as K
 import numpy as np
 from sklearn import model_selection
 
@@ -65,6 +69,17 @@ class ModelConfig:
 
 
 @dataclass
+class SerializedModelConfig:
+    # Because Keras models cannot be easily pickled, it must be converted
+    # To a SerializedModelConfig. Users should not use this class
+    # when creating ParamConfig objects.
+    model_callable: typing.Callable
+    optimizer: str
+    optimizer_args: typing.Dict
+    loss: typing.Callable
+
+
+@dataclass
 class GeneratorConfig:
     # Should return a tuple containing x_train, y_train, x_test, y_test
     # Must take in **kwargs as an argument
@@ -89,7 +104,7 @@ class EvalConfig:
 class ParamConfig:
     data: DataConfig
     generator: GeneratorConfig
-    model: ModelConfig
+    model: typing.Union[ModelConfig, SerializedModelConfig]
     batch_size: int
     seed: int
     val_split: float
@@ -106,7 +121,7 @@ class ParamConfig:
 class ParamGrid:
     data: typing.Sequence[DataConfig]
     generator: typing.Sequence[GeneratorConfig]
-    model: typing.Sequence[ModelConfig]
+    model: typing.Sequence[typing.Union[ModelConfig, SerializedModelConfig]]
     batch_size: typing.Sequence[int]
     seed: typing.Sequence[int]
     val_split: typing.Sequence[int]
@@ -161,3 +176,23 @@ if set(ParamConfig.__dataclass_fields__.keys()) \
 def create_param_grid(config_type, params):
     config_list = list(model_selection.ParameterGrid(params))
     return [config_type(**m) for m in config_list]
+
+
+def serialize_param_config(params):
+    optimizer = params.model.optimizer
+    opt_name = '{}.{}'.format(optimizer.__class__.__module__,
+                              optimizer.__class__.__name__)
+    opt_vars = {x: (K.eval(y) if isinstance(y, tf.Variable) else y)
+                for x, y in vars(optimizer).items()
+                if x not in ['updates', 'weights', 'iterations',
+                             'initial_decay']}
+
+    serialized_model_config = SerializedModelConfig(**{
+        'model_callable': params.model.model_callable,
+        'optimizer': opt_name,
+        'optimizer_args': opt_vars,
+        'loss': params.model.loss
+    })
+    new_params = copy.copy(params)
+    new_params.model = serialized_model_config
+    return new_params

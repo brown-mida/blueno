@@ -31,6 +31,7 @@ import datetime
 import logging
 import multiprocessing
 import pathlib
+import pickle
 import time
 from typing import List, Union
 
@@ -61,10 +62,14 @@ from ..utils.elasticsearch import (
     insert_or_ignore_filepaths,
     create_new_connection
 )
+from ..types import (
+    ParamConfig,
+    ParamGrid,
+    serialize_param_config
+)
 from ..utils.slack import slack_report
 from ..utils.preprocessing import prepare_data
 from ..utils.callbacks import create_callbacks
-from ..types import ParamConfig, ParamGrid
 
 from ..utils.reporting import generate_report
 
@@ -191,11 +196,13 @@ def start_job(x_train: np.ndarray,
     else:
         job_logger.info('No slack token found, not generating report.')
 
-    # acc_i = model.metrics_names.index('acc')
-    # TODO(luke): Document this change, originally we only upload good models,
-    # now we upload all models to GCS
-    # if model.evaluate_generator(valid_gen)[acc_i] >= 0.8:
-    upload_model_to_gcs(job_name, job_id, model_filepath)
+    pickle_file = open(os.path.join(output_path, 'params.pkl'), 'wb')
+    pickle.dump(serialize_param_config(params), pickle_file)
+    pickle_file.close()
+
+    params.data.datastore.push_folder_to_datastore(
+        os.path.join(params.data.results_dir, f'{job_name}-{job_id}/'),
+        output_path)
 
     end_time = datetime.datetime.utcnow().isoformat()
     # Do not change, this generates the ended at ES field

@@ -52,7 +52,7 @@ data_list = create_param_grid(DataConfig, {
     'data_dir': ['../data/processed_mnist/'],
     'index_col': ['ID'],
     'value_col': ['Label'],
-    'results_dir': ['../data/processed_mnist/results/']
+    'results_dir': ['../results/']
 })
 
 param_grid_local = create_param_grid(ParamConfig, {

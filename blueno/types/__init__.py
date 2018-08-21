@@ -1,7 +1,9 @@
 from .config import (
     ParamGrid, ParamConfig, DataConfig, ModelConfig,
     GeneratorConfig, LukePipelineConfig, PreprocessConfig,
-    create_param_grid
+    SerializedModelConfig,
+    create_param_grid,
+    serialize_param_config
 )
 
 __all__ = [
@@ -12,5 +14,7 @@ __all__ = [
     'ModelConfig',
     'GeneratorConfig',
     'PreprocessConfig',
-    'create_param_grid'
+    'SerializedModelConfig',
+    'create_param_grid',
+    'serialize_param_config'
 ]
